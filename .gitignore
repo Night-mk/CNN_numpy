@@ -1,6 +1,7 @@
 # dataset
-MNIST_data/*
+data/*
 
 # IDE files
 __pycache__/*
 .vs/*
+model_save/*

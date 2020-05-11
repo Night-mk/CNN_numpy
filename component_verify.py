@@ -60,6 +60,7 @@ def loss_test():
 
 '''
     验证：卷积计算Conv（成功）
+    测试了多种条件（stride,padding,batch）变化下的卷积正确性
 '''
 def conv_test():
     # 自定义卷积核和偏移量，使用pytorch计算卷积，和反向传播结果
@@ -70,47 +71,90 @@ def conv_test():
     b_numpy = b.detach().numpy()
 
     """定义输入样本"""
+    # 单张图片输入
     x = torch.tensor(np.random.randn(1, 3, 5, 5).astype(np.float32), requires_grad=True)  # 1张3通道的5乘5的图像
+    # 多张图片输入
+    # x = torch.tensor(np.random.randn(2, 3, 5, 5).astype(np.float32), requires_grad=True)  # 2张3通道的5乘5的图像
     x_numpy = x.detach().numpy()
 
-    """定义输出误差"""
-    dy = torch.tensor(np.random.randn(1,5,3,3).astype(np.float32), requires_grad=True).float()
-    dy_numpy = dy.detach().numpy()
-
     print('-------参数打印-------')
-    print('w: \n', w_numpy)
-    print('b: \n', b_numpy)
-    print('x: \n', x_numpy)
-    print('dy: \n', dy_numpy)
+    # print('w: \n', w_numpy)
+    # print('b: \n', b_numpy)
+    # print('x: \n', x_numpy)
 
+    """前向传播"""
     # pytorch计算卷积前向传播
-    conv_out = F.conv2d(x, w, b, stride=1, padding=0)
+    ## padding=0 stride=0
+    # cl_tensor = torch.nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=0)
+    ## padding=1 stride=1
+    # cl_tensor = torch.nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=1)
+    ## stride=2 padding=0
+    # cl_tensor = torch.nn.Conv2d(3, 5, kernel_size=3, stride=2, padding=0)
+    ## stride=2 padding=1
+    cl_tensor = torch.nn.Conv2d(3, 5, kernel_size=3, stride=2, padding=1)
+
+    cl_tensor.weight = torch.nn.Parameter(w, requires_grad=True)
+    cl_tensor.bias = torch.nn.Parameter(b, requires_grad=True)
+    conv_out_tensor = cl_tensor(x)
     # numpy计算卷积前向传播
-    cl1 = Conv.ConvLayer(x_numpy.shape, 3,3,5, zero_padding=0, stride=1, learning_rate=0.0001, method='VALID') # convlayer
+    ## padding=0 stride=0
+    # cl1 = Conv.ConvLayer(x_numpy.shape, 3,3,5, zero_padding=0, stride=1, learning_rate=0.0001, method='VALID')
+    ## padding=1 stride=1
+    # cl1 = Conv.ConvLayer(x_numpy.shape, 3,3,5, zero_padding=1, stride=1, learning_rate=0.0001, method='SAME')
+    ## stride=2 padding=0
+    # cl1 = Conv.ConvLayer(x_numpy.shape, 3,3,5, zero_padding=0, stride=2, learning_rate=0.0001, method='VALID')
+    ## stride=2 padding=1
+    cl1 = Conv.ConvLayer(x_numpy.shape, 3,3,5, zero_padding=1, stride=2, learning_rate=0.0001, method='SAME')
     cl1.set_weight(w_numpy)
     cl1.set_bias(b_numpy)
     conv_out_numpy = cl1.forward(x_numpy) # forward 
+    print('conv_out_numpy.shape: ',conv_out_numpy.shape)
     
+    """梯度计算"""
+    """定义输出误差"""
+    ## 单张误差
+    # dy = torch.tensor(np.random.randn(1,5,3,3).astype(np.float32), requires_grad=True).float()
+    ## 多张误差
+    # dy = torch.tensor(np.random.randn(2,5,3,3).astype(np.float32), requires_grad=True).float()
+    ## padding=1误差
+    dy_numpy = np.random.random(conv_out_numpy.shape).astype(np.float32)
+    dy = torch.tensor(dy_numpy, requires_grad=True).float()
+    print('dy: \n', dy_numpy)
+
     # pytorch 计算卷积反向传播
-    conv_out.backward(dy)
+    conv_out_tensor.backward(dy)
+    x_grad = x.grad
+    w_grad = cl_tensor.weight.grad
+    b_grad = cl_tensor.bias.grad
     # numpy 计算卷积反向传播
-    eta_next = cl1.gradient(dy_numpy)
-    cl1.backward() 
+    x_grad_numpy = cl1.gradient(dy_numpy)
+    w_grad_numpy = cl1.weight_grad
+    b_grad_numpy = cl1.bias_grad
+    # cl1.backward() 
 
     # 输出结果对比
     print('-----对比输出-----')
-    print('conv_out: \n', conv_out)
-    print('conv_out.shape: \n', conv_out.shape)
+    print('conv_out_tensor: \n', conv_out_tensor)
+    print('conv_out_tensor.shape: \n', conv_out_tensor.shape)
 
     print('conv_out_numpy: \n', conv_out_numpy)
     print('conv_out_numpy.shape: \n', conv_out_numpy.shape)
     
     print('-----对比x_grad-----')
-    print('x_grad: \n', x.grad)
-    print('x_grad.shape: \n', x.grad.shape)
+    print('x_grad: \n', x_grad)
+    print('x_grad.shape: \n', x_grad.shape)
 
-    print('x_grad_numpy: \n', eta_next)
-    print('x_grad_numpy.shape: \n', eta_next.shape)
+    print('x_grad_numpy: \n', x_grad_numpy)
+    print('x_grad_numpy.shape: \n', x_grad_numpy.shape)
+
+    print('-----对比w_grad-----')
+    print('w_grad: \n', w_grad)
+    print('w_grad_numpy: \n', w_grad_numpy)
+
+    print('-----对比b_grad-----')
+    print('b_grad: \n', b_grad)
+    print('b_grad_numpy: \n', b_grad_numpy)
+
 
 '''
     验证：激活层AC（成功）
@@ -150,6 +194,7 @@ def bn_test():
     x = torch.tensor(x_numpy, requires_grad=True)
     # 初始化
     # pytorch (需要添加affine=False参数)
+    # affine定义了BN层的参数γ和β是否是可学习的(不可学习默认是常数1和0). 通常需要设置为True，但测试时numpy的γ=1和β=0，故此时需要将参数设置为False
     bn_tensor = torch.nn.BatchNorm2d(5, affine=False)
     # numpy
     bn_numpy = BN.BatchNorm(x_numpy.shape)
@@ -285,8 +330,8 @@ def pooling_test():
     
 if __name__ == '__main__':
     # loss_test()
-    # conv_test()
+    conv_test()
     # ac_test()
-    bn_test()
+    # bn_test()
     # fc_test()
     # pooling_test()

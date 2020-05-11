@@ -8,6 +8,7 @@ import Activators
 
 '''
     Filter类保存了卷积层的参数以及梯度，并且实现了用梯度下降算法来更新参数。
+    （实际发现放在一个类里封装不太好使用。。。后期封装，参数需要处理成计算图的时候可能会使用到）
 '''
 class Filter(object):
     # 权重参数weight（参数的梯度值weight_grad），偏移量bias（偏移量的梯度值bias_grad）
@@ -47,7 +48,7 @@ class Filter(object):
 
 '''
 通用函数：img2col
-将将卷积窗口中的数拉成一行,每行k^2列,总共(out_h*out_w)行
+将图像在卷积窗口中的数拉成一行,每行k^2列,总共(out_h*out_w)行
 [B,Cin,H,W]->[B,Cin*k*k,(H-k+1)*(W-k+1)]
 '''
 def img2col(input_array, filter_size, stride=1, zp=0):
@@ -55,14 +56,14 @@ def img2col(input_array, filter_size, stride=1, zp=0):
     output_matrix=[]
     width = input_array.shape[3]
     height = input_array.shape[2]
-    # 计算卷积的输出矩阵的大小
-    out_w = (width-filter_size+2*zp)//stride+1
-    out_h = (height-filter_size+2*zp)//stride+1
-    for i in range(0, out_h, stride):
-        for j in range(0, out_w, stride):
+    # range的上限应该是(input_size - filter_size + 1)
+    for i in range(0, height-filter_size+1, stride):
+        for j in range(0, width-filter_size+1, stride):
             input_col = input_array[:, :, i:i+filter_size, j:j+filter_size].reshape([-1])
+            # print('inputcol: \n', input_col)
             output_matrix.append(input_col)
     output_matrix = np.array(output_matrix).T
+    # print('output_matrix:', output_matrix)
     # output_shape = [B,Cin*k*k,(H-k+1)*(W-k+1)] stride默认为1
     # output_matrix 2d tensor [height, width]
     # 输出之前需要转置
@@ -72,13 +73,14 @@ def img2col(input_array, filter_size, stride=1, zp=0):
 通用函数: padding
 填充方法["VALID"截取, "SAME"填充]
 '''
-def padding(input_array, method, ksize):
+def padding(input_array, method, zp):
     # "VALID"不填充
     if method=='VALID':
         return input_array
     # "SAME"填充
     elif method=='SAME':
-        input_array = np.pad(input_array, ((0, 0), (0, 0), (ksize // 2, ksize // 2), (ksize // 2, ksize // 2)), 'constant', constant_values=0)
+        # (before_1, after_1)表示第1轴两边缘分别填充before_1个和after_1个数值
+        input_array = np.pad(input_array, ((0, 0), (0, 0), (zp, zp), (zp, zp)), 'constant', constant_values=0)
         return input_array
 
 '''
@@ -88,7 +90,6 @@ def padding(input_array, method, ksize):
 def element_wise_op(array, op):
     for i in np.nditer(array,op_flags=['readwrite']):
         i[...] = op(i)   # 将元素i传入op函数，返回值，再修改i
-
 
 '''
     ConvLayer类，实现卷积层以及前向传播函数，反向传播函数
@@ -151,19 +152,19 @@ class ConvLayer(object):
         bias_col = self.bias_data.reshape([self.filter_num, -1])
 
         # padding方法计算填充关系
-        input_array = padding(input_array, self.method, self.filter_width)
+        input_pad = padding(input_array, self.method, self.zero_padding)
         # 将输入数据拉成矩阵（费时），反向传播时需要使用
         self.input_col = []
         conv_out = np.zeros(self.output_array.shape)
         
         # 对输入数据batch的每个图片、特征图进行卷积计算
         for i in range(0, self.batchsize):
-            input_i = input_array[i][np.newaxis,:] #获取每个batch的输入内容
+            input_i = input_pad[i][np.newaxis,:] #获取每个batch的输入内容
             input_col_i = img2col(input_i, self.filter_width, self.stride, self.zero_padding) #将每个batch的输入拉为矩阵
             '''
                 Kernel[Cout,Cin*k*k] dot X[Batch,Cin*k*k,(H-k+1)*(W-k+1)] = Y[Batch, Cout, (H-k+1)*(W-k+1)]
             '''
-            # print('input_col_i.shape: \n',input_col_i.shape)
+            print('input_col_i.shape: \n',input_col_i.shape)
             # print('conv_result: \n',np.dot(weights_col, input_col_i))
             conv_out_i = np.dot(weights_col, input_col_i)+bias_col #计算矩阵卷积，输出大小为[Cout,(H-k+1)*(W-k+1)]的矩阵输出
             conv_out[i] = np.reshape(conv_out_i, self.output_array[0].shape) #转换为[Cout,Hout,Wout]的输出
@@ -177,6 +178,7 @@ class ConvLayer(object):
         # eta表示上层（l+1层）向下层（l层）传输的误差
         # 即Z_ij, eta=[batch,Cout,out_h,out_w]
         self.eta = eta
+        print('eta.shape: \n', self.eta.shape)
         # eta_col=[batch,Cout,out_h*out_w]
         eta_col = np.reshape(eta, [self.batchsize, self.filter_num, -1])
         
@@ -192,16 +194,31 @@ class ConvLayer(object):
         # print('eta.shape: \n',self.eta.shape)
         self.bias_grad += np.sum(eta_col, axis=(0, 2))
         
-        # 计算填充后的误差delta_Z,即使用0填充eta_col,'VALID'填充数量为ksize-1，'SAME'填充数量为ksize/2
+        """计算传输到上一层的误差"""
+        ## 针对stride>=2时对误差矩阵的填充，需要在每个误差数据中间填充(stride-1) ##
+        eta_pad = self.eta
+        if self.stride>=2:
+            # 计算中间填充后矩阵的size
+            pad_size = (self.eta.shape[3]-1)*(self.stride-1)+self.eta.shape[3]
+            eta_pad = np.zeros((self.eta.shape[0], self.eta.shape[1], pad_size, pad_size))
+            for i in range(0, self.eta.shape[3]):
+                for j in range(0, self.eta.shape[3]):
+                    eta_pad[:,:,self.stride*i,self.stride*j] = self.eta[:,:,i,j]
+        # print('eta: \n', self.eta[0,1])
+        # print('eta_pad: \n', eta_pad[0,1])
+
+        # 使用输出误差填充零 conv rot180[weights]
+        # 计算填充后的误差delta_Z_pad,即使用0在eta_pad四周填充,'VALID'填充数量为ksize-1，'SAME'填充数量为ksize/2
         if self.method=='VALID':
-            eta_pad = np.pad(self.eta, ((0,0),(0,0),(self.filter_height-1, self.filter_height-1),(self.filter_width-1, self.filter_width-1)),'constant',constant_values = (0,0))
+            eta_pad = np.pad(eta_pad, ((0,0),(0,0),(self.filter_height-1, self.filter_height-1),(self.filter_width-1, self.filter_width-1)),'constant',constant_values = (0,0))
 
         if self.method=='SAME':
-            eta_pad = np.pad(self.eta, ((0,0),(0,0),(self.filter_height//2, self.filter_height//2),(self.filter_width//2, self.filter_width//2)),'constant',constant_values = (0,0))
-
+            eta_pad = np.pad(eta_pad, ((0,0),(0,0),(self.filter_height//2, self.filter_height//2),(self.filter_width//2, self.filter_width//2)),'constant',constant_values = (0,0))
+        
+        # print('eta.shape: \n', self.eta.shape[0])
         # print('eta_pad.shape: \n', eta_pad.shape)
 
-        # 计算旋转180度的权重矩阵，rot180(W)
+        ## 计算旋转180度的权重矩阵，rot180(W)
         # self.weights_data[Cout,depth,h,w]
         # A[::-1]对于行向量可以左右翻转；对于二维矩阵可以实现上下翻转
         # 对于4维数据的h,w翻转
@@ -212,15 +229,16 @@ class ConvLayer(object):
         flip_weights_col = flip_weights.reshape([self.channel_num, -1])
         eta_pad_col = []
         for i in range(0, self.batchsize):
-            eta_pad_col_i = img2col(eta_pad[i][np.newaxis,:], self.filter_width, self.stride, self.zero_padding)
+            eta_pad_col_i = img2col(eta_pad[i][np.newaxis,:], self.filter_width, 1, self.zero_padding)
             # print('eta_pad_col_i.shape: \n', eta_pad_col_i.shape)
             eta_pad_col.append(eta_pad_col_i)
         eta_pad_col = np.array(eta_pad_col)
 
-        # 计算向上一层传播的误差eta_next,卷积乘
+        ## 计算向上一层传播的误差eta_next,采用卷积乘计算
         # 原本，delta_Z^(l)=delta_Z^(l+1) conv rot180(W^(l))
         # 这里没有像前向计算里的那种batchsize的概念了，batch刚好把行向量补齐
         eta_next = np.dot(flip_weights_col, eta_pad_col)
+        print('eta_next.shape:\n', eta_next.shape)
         # input_shape就是上一层的output_shape
         eta_next = np.reshape(eta_next, self.input_shape)
         

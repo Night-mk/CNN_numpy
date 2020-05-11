@@ -18,7 +18,7 @@ class Lenet(nn.Module):
         super(Lenet, self).__init__()
         # 定义层
         self.conv1 = nn.Conv2d(in_channels=in_dim, out_channels=6, kernel_size=5, stride=1, padding=2)
-        self.conv2 = nn.Conv2d(6, 16,kernel_size=5)
+        self.conv2 = nn.Conv2d(6, 16, kernel_size=5)
         self.conv3 = nn.Conv2d(16, 120, kernel_size=5)
 
         self.maxpool = nn.MaxPool2d(kernel_size=2)
@@ -44,14 +44,14 @@ class Lenet(nn.Module):
 
 
 def test_lenet():
-    path1=os.path.abspath('./MNIST_data/')
-    print('path: ',path1)
+    # path1=os.path.abspath('./data/')
+    # print('path: ',path1)
     """处理MNIST数据集"""
-    train_dataset = datasets.MNIST('./MNIST_data/',download=True,train=True,transform=transforms.Compose([
+    train_dataset = datasets.MNIST('./data/',download=True,train=True,transform=transforms.Compose([
                                    transforms.ToTensor(),
                                   transforms.Normalize((0.1307,), (0.3081,)),
                                ]))
-    test_dataset = datasets.MNIST('./MNIST_data/',download=True,train=False,
+    test_dataset = datasets.MNIST('./data/',download=True,train=False,
                               transform=transforms.Compose([
                                   transforms.ToTensor(),
                                   transforms.Normalize((0.1307,), (0.3081,)),
@@ -76,7 +76,7 @@ def test_lenet():
     optimizer = torch.optim.SGD(lenet.parameters(),lr=1e-2,momentum=0.5)
 
     """迭代训练"""
-    n_epochs = 5
+    n_epochs = 1
     # 迭代轮数
     for epoch in range(n_epochs):
         running_loss = 0.0
