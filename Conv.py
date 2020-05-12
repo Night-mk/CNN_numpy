@@ -60,10 +60,10 @@ def img2col(input_array, filter_size, stride=1, zp=0):
     for i in range(0, height-filter_size+1, stride):
         for j in range(0, width-filter_size+1, stride):
             input_col = input_array[:, :, i:i+filter_size, j:j+filter_size].reshape([-1])
-            # print('inputcol: \n', input_col)
+            # print('inputcol: \n', input_col.shape)
             output_matrix.append(input_col)
     output_matrix = np.array(output_matrix).T
-    # print('output_matrix:', output_matrix)
+    # print('output_matrix:', output_matrix.shape)
     # output_shape = [B,Cin*k*k,(H-k+1)*(W-k+1)] stride默认为1
     # output_matrix 2d tensor [height, width]
     # 输出之前需要转置

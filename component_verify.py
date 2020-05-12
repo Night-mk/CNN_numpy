@@ -1,5 +1,12 @@
 '''
     component_verify.py 使用pytorch构建CNN网络及其组件，并验证numpy实现CNN的组件的正确性
+    -- 卷积计算Conv
+    -- 激活层AC
+    -- 批量标准化层BN
+    -- 全连接层FC
+    -- 池化层Pooling
+    -- 损失函数CrossEntropyLoss
+    -- 反卷积层Deconv
 '''
 
 import torch 
@@ -12,6 +19,7 @@ import Activators
 import FC
 import BN
 import BN_other
+import Deconv
 import numpy as np
 
 '''
@@ -327,11 +335,87 @@ def pooling_test():
     print('pool_out_numpy_grad: \n', pool_eta)
     print('pool_out_numpy_grad.shape: \n', pool_eta.shape)
 
+
+'''
+    验证：反卷积层Deconv
+'''
+def deconv_test():
+    """手动定义卷积核(weight)和偏置"""
+    # w_numpy = np.random.randn(3,5,4,4).astype(np.float32)
+    w_numpy = np.random.randn(3,5,3,3).astype(np.float32)
+    # w_numpy = np.ones((3,5,3,3)).astype(np.float32)
+    b_numpy = np.random.randn(5).astype(np.float32)
+    w = torch.tensor(w_numpy, requires_grad=True)
+    b = torch.tensor(b_numpy, requires_grad=True)
+    w_numpy = w_numpy.transpose((1,0,2,3))
+    print('w_numpy.shape: ',w_numpy.shape)
+
+    """定义输入样本"""
+    # x_numpy = np.random.randn(1,3,4,4).astype(np.float32)
+    # x_numpy = np.random.randn(1,3,2,2).astype(np.float32)
+    x_numpy = np.ones((1,3,2,2)).astype(np.float32)
+    x = torch.tensor(x_numpy, requires_grad=True)
+
+    '''前向传播'''
+    ## torch
+    # decl_tensor = torch.nn.ConvTranspose2d(3, 5, kernel_size=4, stride=2, padding=1)
+    decl_tensor = torch.nn.ConvTranspose2d(3, 5, kernel_size=3, stride=1, padding=0)
+    decl_tensor.weight = torch.nn.Parameter(w, requires_grad=True)
+    decl_tensor.bias = torch.nn.Parameter(b, requires_grad=True)
+    deconv_out_tensor = decl_tensor(x)
+    
+    ## numpy
+    # decl_numpy = Deconv.Deconv(x_numpy.shape, out_channel=5, filter_size=4,  zero_padding=1, stride=2, learning_rate=0.0001)
+    decl_numpy = Deconv.Deconv(x_numpy.shape, out_channel=5, filter_size=3,  zero_padding=0, stride=1, learning_rate=0.0001)
+    decl_numpy.set_weight(w_numpy)
+    decl_numpy.set_bias(b_numpy)
+    deconv_out_numpy = decl_numpy.forward(x_numpy)
+
+    print('-----对比输出-----')
+    print('deconv_out_tensor: \n', deconv_out_tensor)
+    print('deconv_out_tensor.shape: \n', deconv_out_tensor.shape)
+
+    print('deconv_out_numpy: \n', deconv_out_numpy)
+    print('deconv_out_numpy.shape: \n', deconv_out_numpy.shape)
+
+    '''反向传播'''
+    dy_numpy = np.random.random(deconv_out_numpy.shape).astype(np.float32)
+    dy = torch.tensor(dy_numpy, requires_grad=True)
+    
+    ## pytorch
+    deconv_out_tensor.backward(dy)
+    x_grad = x.grad
+    w_grad = decl_tensor.weight.grad
+    b_grad = decl_tensor.bias.grad
+
+    ## numpy
+    x_grad_numpy = decl_numpy.gradient(dy_numpy)
+    w_grad_numpy = decl_numpy.weights_grad
+    b_grad_numpy = decl_numpy.bias_grad
+
+    print('-----对比x_grad-----')
+    print('x_grad: \n', x_grad)
+    print('x_grad.shape: \n', x_grad.shape)
+
+    print('x_grad_numpy: \n', x_grad_numpy)
+    print('x_grad_numpy.shape: \n', x_grad_numpy.shape)
+
+    print('-----对比w_grad-----')
+    print('w_grad: \n', w_grad)
+    print('w_grad_numpy: \n', w_grad_numpy)
+
+    print('-----对比b_grad-----')
+    print('b_grad: \n', b_grad)
+    print('b_grad_numpy: \n', b_grad_numpy)
+
+
+
     
 if __name__ == '__main__':
     # loss_test()
-    conv_test()
+    # conv_test()
     # ac_test()
     # bn_test()
     # fc_test()
     # pooling_test()
+    deconv_test()
