@@ -113,7 +113,8 @@ def conv_test():
     # cl1 = Conv.ConvLayer(x_numpy.shape, 3,3,5, zero_padding=0, stride=2, learning_rate=0.0001, method='VALID')
     ## stride=2 padding=1
     cl1 = Conv.ConvLayer(x_numpy.shape, 3,3,5, zero_padding=1, stride=2, learning_rate=0.0001, method='SAME')
-    cl1.set_weight(w_numpy)
+    # cl1.set_weight(w_numpy)
+    cl1.weight = w_numpy
     cl1.set_bias(b_numpy)
     conv_out_numpy = cl1.forward(x_numpy) # forward 
     print('conv_out_numpy.shape: ',conv_out_numpy.shape)
@@ -206,11 +207,9 @@ def bn_test():
     bn_tensor = torch.nn.BatchNorm2d(5, affine=False)
     # numpy
     bn_numpy = BN.BatchNorm(x_numpy.shape)
-    # bn_numpy1 = BN_other.BatchNormal()
     """计算前向传播"""
     bn_out_tensor = bn_tensor(x)
     bn_out_numpy = bn_numpy.forward(x_numpy,'train')
-    # bn_out_numpy1 = bn_numpy1.forward(x_numpy, axis=1)
 
     """计算反向传播"""
     # 误差参数初始化
@@ -337,7 +336,7 @@ def pooling_test():
 
 
 '''
-    验证：反卷积层Deconv
+    验证：反卷积层Deconv（成功）
 '''
 def deconv_test():
     """手动定义卷积核(weight)和偏置"""
@@ -413,9 +412,9 @@ def deconv_test():
     
 if __name__ == '__main__':
     # loss_test()
-    # conv_test()
+    conv_test()
     # ac_test()
     # bn_test()
     # fc_test()
     # pooling_test()
-    deconv_test()
+    # deconv_test()

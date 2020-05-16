@@ -5,3 +5,5 @@ data/*
 __pycache__/*
 .vs/*
 model_save/*
+
+layers/__pycache__/*

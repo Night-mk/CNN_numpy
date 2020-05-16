@@ -68,12 +68,20 @@ def test_lenet():
     """初始化使用网络"""
     lenet = Lenet(in_dim=1, n_class=10)
     print('model: \n', lenet)
+    print('parameters: \n', lenet.parameters())
+    print('modules: \n', lenet._modules)
     # if use_gpu: lenet = Lenet(in_dim=1, n_class=10).to(device)
 
     """构建优化器"""
     # 使用交叉熵计算损失？
     loss_fn = nn.NLLLoss()
     optimizer = torch.optim.SGD(lenet.parameters(),lr=1e-2,momentum=0.5)
+
+    print('optim_param: \n', optimizer.param_groups)
+    # 打印参数
+    # for param in lenet.parameters():
+    #     print(param)
+        # print('isparam: ',isinstance(param, nn.Parameter))
 
     """迭代训练"""
     n_epochs = 1
@@ -85,6 +93,7 @@ def test_lenet():
         print("-"*10)
         # 使用迭代器训练
         for t, (data, target) in enumerate(train_loader):
+            break
             # 从Variable获取数据和标签
             data,target = Variable(data),Variable(target)
             # 前向传播计算

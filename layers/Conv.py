@@ -5,8 +5,6 @@ Filter类，存储模型
 '''
 import numpy as np
 import Activators
-from Module import Module
-from Parameter import Parameter
 
 '''
     Filter类保存了卷积层的参数以及梯度，并且实现了用梯度下降算法来更新参数。
@@ -96,11 +94,10 @@ def element_wise_op(array, op):
 '''
     ConvLayer类，实现卷积层以及前向传播函数，反向传播函数
 '''
-class ConvLayer(Module):
+class ConvLayer(object):
     # 初始化卷积层函数
     # 参数包括：输入数据大小[batch大小、通道数、输入高度、输入宽度]，滤波器宽度、滤波器高度、滤波器数目、补零数目、步长、学习速率、补零方法
     def __init__(self, input_shape, filter_width, filter_height, filter_num, zero_padding, stride, learning_rate, method='VALID'):
-        super(ConvLayer, self).__init__()
         # input_array 4d tensor [batch, channel, height, width]
         self.input_shape = input_shape
         self.batchsize = input_shape[0]
@@ -127,32 +124,20 @@ class ConvLayer(Module):
 
         # 卷积层过滤器初始化
         '''filter_num = output_channel,就是卷积输出feature map的通道数'''
-        param_weights = np.random.uniform(-1e-2, 1e-2,(self.filter_num,self.channel_num, self.filter_height, self.filter_width))
-        param_bias = np.zeros(self.filter_num)
-        self.weights = Parameter(param_weights, requires_grad=True)
-        self.bias = Parameter(param_bias, requires_grad=True)
-        # print('bias.shape: \n',self.bias.shape)
+        self.weights_data = np.random.uniform(-1e-2, 1e-2,(self.filter_num,self.channel_num, self.filter_height, self.filter_width))
+        self.bias_data = np.zeros(self.filter_num)
+        print('bias_data.shape: \n',self.bias_data.shape)
 
         self.learning_rate = learning_rate  # 学习速率
-        self.weights_grad = self.weights.grad
-        self.bias_grad = self.bias.grad
+        self.weight_grad = np.zeros(self.weights_data.shape)
+        self.bias_grad = np.zeros(self.bias_data.shape)
 
     # 设置特定的权重和偏移量
     def set_weight(self, weight):
-        self.weights = weight
+        self.weights_data = weight
 
     def set_bias(self, bias):
-        self.bias = bias
-
-    # 设置module打印格式
-    def extra_repr(self):
-        s = ('input_shape={input_shape}, out_channels={filter_num}, kernel_size={filter_width}'
-             ', stride={stride}, padding={zero_padding}')
-        if self.bias is None:
-            s += ', bias=False'
-        if self.method != None:
-            s += ', method={method}'
-        return s.format(**self.__dict__)
+        self.bias_data = bias
 
     # 静态方法计算卷积层输出尺寸大小=(W-F+2P)/S+1
     @staticmethod
@@ -163,8 +148,8 @@ class ConvLayer(Module):
     # 前向传播函数 img2col
     def forward(self, input_array):
         # 转换filter为矩阵, 将每个filter拉为一列, filter [Cout,depth,height,width]
-        weights_col = self.weights.data.reshape([self.filter_num, -1])
-        bias_col = self.bias.data.reshape([self.filter_num, -1])
+        weights_col = self.weights_data.reshape([self.filter_num, -1])
+        bias_col = self.bias_data.reshape([self.filter_num, -1])
 
         # padding方法计算填充关系
         input_pad = padding(input_array, self.method, self.zero_padding)
@@ -197,20 +182,17 @@ class ConvLayer(Module):
         # eta_col=[batch,Cout,out_h*out_w]
         eta_col = np.reshape(eta, [self.batchsize, self.filter_num, -1])
         
-        '''计算W的梯度矩阵 delta_W=a^(l-1) conv delta_Z^l'''
+        # 计算W的梯度矩阵 delta_W=a^(l-1) conv delta_Z^l
         for i in range(0, self.batchsize):
             # a^(l-1)=[batch,Cin*k*k,()*()]
             # input_col[i]=[Cin*k*k, out_h*out_w]
             # eta_col[i] = [Cout,out_h*out_w]
             # dot后的值=[Cout,Cin*k*k]
-            self.weights_grad += np.dot(eta_col[i], self.input_col[i].T).reshape(self.weights.data.shape)
-        '''计算b的梯度矩阵'''
+            self.weight_grad += np.dot(eta_col[i], self.input_col[i].T).reshape(self.weights_data.shape)
+        # 计算b的梯度矩阵
         # print('eta_col: \n',eta_col)
         # print('eta.shape: \n',self.eta.shape)
         self.bias_grad += np.sum(eta_col, axis=(0, 2))
-        # 设置Parameter的grad值
-        self.weights.set_grad(self.weights_grad)
-        self.bias.set_grad(self.bias_grad)
         
         """计算传输到上一层的误差"""
         ## 针对stride>=2时对误差矩阵的填充，需要在每个误差数据中间填充(stride-1) ##
@@ -237,10 +219,10 @@ class ConvLayer(Module):
         # print('eta_pad.shape: \n', eta_pad.shape)
 
         ## 计算旋转180度的权重矩阵，rot180(W)
-        # self.weight[Cout,depth,h,w]
+        # self.weights_data[Cout,depth,h,w]
         # A[::-1]对于行向量可以左右翻转；对于二维矩阵可以实现上下翻转
         # 对于4维数据的h,w翻转
-        flip_weights = self.weights.data[...,::-1,::-1]
+        flip_weights = self.weights_data[...,::-1,::-1]
         # print('flip_weights.shape: \n',flip_weights.shape)
         # 参数矩阵需要维度转换 W[Cout,Cin,h,w]->W[Cin,Cout,h,w]这样变化为col矩阵的时候，可以直接使用reshape(channel_num, -1)获得对应的矩阵大小，并完成和填充误差进行卷积计算获得L-1层的误差
         flip_weights = flip_weights.swapaxes(0, 1)
@@ -262,17 +244,21 @@ class ConvLayer(Module):
         
         return eta_next
 
-    '''
     # 反向传播函数
-    def backward(self):
+    def backward(self, weight_decay=0.0004):
         # 反向传播时更新权重参数
-        self.weights -= self.learning_rate * self.weights_grad
-        self.bias -= self.learning_rate * self.bias_grad
+        self.weights_data -= self.learning_rate * self.weight_grad
+        self.bias_data -= self.learning_rate * self.bias_grad
 
         # 将该层梯度重新初始化，用于接收下次迭代的梯度计算
-        self.weights_grad = np.zeros(self.weigh.shape)
-        self.bias_grad= np.zeros(self.bias.shape)
-    '''
+        self.weight_grad = np.zeros(self.weights_data.shape)
+        self.bias_grad= np.zeros(self.bias_data.shape)
+
+    # 前向传播函数 as_strided(以后再整这个版本)
+    def forward_advance(self, input_array):
+        return 0
+
+
 
 def unit_test():
     print("------test-------")
@@ -314,10 +300,10 @@ def cnn_backward_test():
     eta_next = cl1.gradient(conv_out1-conv_out) # gradient calculation
 
     print('eta_next: \n', eta_next)
-    print('cl1.weight_grad: \n',cl1.weights_grad)
+    print('cl1.weight_grad: \n',cl1.weight_grad)
     print('cl1.bias_grad: \n',cl1.bias_grad)
 
-    # cl1.backward() # update weight
+    cl1.backward() # update weight
 
     
 
