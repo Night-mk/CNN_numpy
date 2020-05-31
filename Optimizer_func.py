@@ -22,7 +22,7 @@ class SGD(Optimizer):
     
     '''训练，更新参数'''
     # 重写父类函数，每个优化函数有自己的方法
-    def step(self, closure=None ):
+    def step(self, closure=None):
         # 对params中每层的数据进行更新
         loss = None # loss目前没啥用
         if closure is not None:
@@ -31,26 +31,47 @@ class SGD(Optimizer):
         for group in self.param_groups:
             momentum = group['momentum']
             learning_rate = group['learning_rate']
+            # print('learning rate: ',learning_rate)
             # 遍历每组参数
             for p in group['params']:
+                # print('optim SGD param_groups id: ', id(p))
                 if p.grad is None:
                     continue
                 d_p = p.grad
+                '''梯度修正？？看看有没有用= ='''
+                # d_p[np.abs(d_p)<1e-10]=0
+                # d_p[np.abs(d_p) > 100]=0
+                # d_p[np.abs(d_p) < -100]=-100
+
                 buf = learning_rate*d_p # V_t = lr*d_p
                 # 处理momentum的计算
                 if momentum!=0:
                     param_state = self.state[p]
                     if 'momentum_buffer' not in param_state: # 第一次迭代，没有历史momentum的时候
-                        buf = param_state['momentum_buffer'] = d_p.copy()
+                        buf = buf
+                    else:
+                        buf = momentum*param_state['momentum_buffer'] + buf # V_t = V_(t-1)*momentum + lr*d_p
+                    param_state['momentum_buffer'] = buf # 更新父类的参数没有使用in-place函数，所以需要重新给momentum_buffer赋值
+                    # print('error: \n', d_p-param_state['momentum_buffer'])
+                
+                p_new = p.data - buf # weight = weight - V_t 更新参数
+                p.set_param(p_new)
+                
+                '''
+                # pytorch 方案 p=p-lr*(v_[t-1]*m + grad*(1-dampening=0))
+                if momentum!=0:
+                    param_state = self.state[p]
+                    if 'momentum_buffer' not in param_state:
+                        buf = d_p.copy()
                     else:
                         buf = param_state['momentum_buffer']
-                        buf = momentum*buf
-                    buf = buf - learning_rate*d_p # V_t = V_(t-1)*momentum - lr*d_p
-                    param_state['momentum_buffer'] = buf # 更新父类的参数没有使用in-place函数，所以需要重新给momentum_buffer赋值
-                
-                p_new = p - buf # weight = weight - V_t
-                p.set_param(p_new) # 更新参数
-        
+                        buf = buf*momentum+d_p
+                    param_state['momentum_buffer'] = buf
+                    d_p = buf
+
+                p.data -= learning_rate*d_p
+                '''
+
         return loss 
                     
 
@@ -100,8 +121,8 @@ class Adam(Optimizer):
                 bias_correction1 = 1 - beta1 ** state['step']
                 bias_correction2 = 1 - beta2 ** state['step']
 
-                if group['weight_decay'] != 0:
-                    grad += group['weight_decay']*p.data
+                if weight_decay != 0:
+                    grad += weight_decay*p.data
                 
                 # 计算动量
                 exp_avg = beta1*exp_avg+(1-beta1)*grad

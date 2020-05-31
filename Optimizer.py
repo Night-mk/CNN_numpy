@@ -31,14 +31,17 @@ class Optimizer(object):
         self.state = defaultdict(dict)
         # 用于存储参数的列表？
         self.param_groups = []
-        param_groups = list(params)
-        print('param_groups: \n', param_groups)
+        # print('params type: \n', type(params))
+        param_groups = list(params) # params=generator
+        # print('param_groups: \n', param_groups)
         if len(param_groups) == 0:
             raise ValueError("optimizer got an empty parameter list")
-        if not isinstance(param_groups[0], dict): # 处理单个参数情况？？
-            param_groups = [{'params': param_groups}]
+        if not isinstance(param_groups[0], dict): # 一般都会返回Generator
+            param_groups = [{'params': param_groups}] # param_groups = [{'params', list[Generator]}]
+            # print('test111111')
     
         for param_group in param_groups:
+            # print('param_group type: \n', type(param_group))
             self.add_param_group(param_group)
 
     '''重新组织网络参数，将param_group放进self.param_groups中'''
@@ -46,7 +49,9 @@ class Optimizer(object):
         # 源码是真的怪异= =
         assert isinstance(param_group, dict), "param group must be a dict" # 断言，判断pram_group必须是个dict
 
-        params = param_group['params']
+        params = param_group['params'] # list
+        # print('params type: \n', type(params))
+
         if isinstance(params, Parameter): # 
             param_group['params'] = [params]
         elif isinstance(params, set):
@@ -55,6 +60,7 @@ class Optimizer(object):
                             'will change between runs. Please use a list instead.')
         else:
             param_group['params'] = list(params)
+            print('test33333')
 
         for param in param_group['params']:
             if not isinstance(param, Parameter):
@@ -81,10 +87,14 @@ class Optimizer(object):
 
     '''将参数的梯度grad设置为0'''
     def zero_grad(self):
+        # print('optim param_groups: \n', self.param_groups[0])
         for group in self.param_groups:
             for p in group['params']:
+                # print('optim param_groups id: ', id(p))
                 if p.grad is not None:
+                    # print('optim param_groups type: \n', type(p))
                     p.zero_grad()
+                    # print('optim param_groups zero_grad: \n', p.grad)
 
     '''优化步骤，参数更新'''
     def step(self, closure):

@@ -2,41 +2,53 @@
     Activators.py文件构建激活函数的前向，反向传播计算
 '''
 import numpy as np
+from Module import Module
 
 '''
     ReLU
 '''
-class ReLU(object):
-    def __init__(self, input_shape):
+class ReLU(Module):
+    def __init__(self):
+        super(ReLU, self).__init__()
         # 反向传播需要使用
-        self.input_array = np.zeros(input_shape)
-        self.eta = np.zeros(input_shape)
+        # self.input_array = np.zeros(input_shape)
+        # self.eta = np.zeros(input_shape)
 
+    # 设置module打印格式
+    def extra_repr(self):
+        s = ()
+        return s
     # 前向传播
     def forward(self, input_array):
         self.input_array = input_array
         # 使用0和input_array的元素依次比较
         # np.maximum：(X, Y, out=None) X与Y逐位比较取其大者
-        return np.maximum(input_array, 0)
+        return np.maximum(self.input_array, 0)
     
     # 反向传播
     # relu'(x)=1*dy if x>0
     # relu'(x)=0*dy if x<0
     # relu'(x)不存在 if x=0.0000... （代码实现里将=0的结果设置为1）
     def gradient(self, eta):
-        self.eta = eta
-        self.eta[self.input_array<0]=0
-        return self.eta
-
+        self.eta_next = eta
+        self.eta_next[self.input_array<0]=0
+        # self.eta_next[self.input_array==0]=1 # 将等于0的数据导数设置为1，看看能不能解决梯度消失的问题
+        return self.eta_next
 
 '''
     LeakyReLU
 '''
-class LeakyReLU(object):
+class LeakyReLU(Module):
     def __init__(self, input_shape, alpha=0.01):
-        self.input_array = np.zeros(input_shape)
-        self.eta = np.zeros(input_shape)
+        # self.input_array = np.zeros(input_shape)
+        # self.eta = np.zeros(input_shape)
+        super(LeakyReLU, self).__init__()
         self.alpha = alpha
+    
+    # 设置module打印格式
+    def extra_repr(self):
+        s = ('alpha={alpha}')
+        return s.format(**self.__dict__)
 
     # 前向传播
     # leakyrelu(x)=x if x>0
@@ -49,10 +61,9 @@ class LeakyReLU(object):
 
     # 反向传播
     def gradient(self, eta):
-        self.eta = eta
-        self.eta[self.input_array<0] *= self.alpha
-        # print('input_array: \n', self.input_array)
-        return self.eta
+        self.eta_next = eta
+        self.eta_next[self.input_array<0] *= self.alpha
+        return self.eta_next
         
 '''
     tanh
@@ -71,7 +82,7 @@ def test_leakyrelu():
     print('x: \n', x)
     print('dy: \n', dy)
 
-    lrelu = LeakyReLU(x.shape)
+    lrelu = LeakyReLU()
     l_out = lrelu.forward(x)
     l_eta = lrelu.gradient(dy)
     print(l_out)
@@ -84,7 +95,7 @@ def test_relu():
     print('x: \n', x)
     print('dy: \n', dy)
 
-    relu = ReLU(x.shape)
+    relu = ReLU()
     l_out = relu.forward(x)
     l_eta = relu.gradient(dy)
     

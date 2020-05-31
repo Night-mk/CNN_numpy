@@ -38,8 +38,8 @@ class Lenet(nn.Module):
         # reshape 卷积的多维feature map为一个2维矩阵
         out_c5 = out_c5.view(in_size, -1)
         out_f6 = self.relu(self.fc1(out_c5))
-        out_f7 = self.fc2(out_f6)
-        out_logsoftmax = self.logsoftmax(out_f7)
+        self.out_f7 = self.fc2(out_f6)
+        out_logsoftmax = self.logsoftmax(self.out_f7)
         return out_logsoftmax
 
 
@@ -77,7 +77,7 @@ def test_lenet():
     loss_fn = nn.NLLLoss()
     optimizer = torch.optim.SGD(lenet.parameters(),lr=1e-2,momentum=0.5)
 
-    print('optim_param: \n', optimizer.param_groups)
+    # print('optim_param: \n', optimizer.param_groups)
     # 打印参数
     # for param in lenet.parameters():
     #     print(param)
@@ -93,29 +93,49 @@ def test_lenet():
         print("-"*10)
         # 使用迭代器训练
         for t, (data, target) in enumerate(train_loader):
-            break
             # 从Variable获取数据和标签
             data,target = Variable(data),Variable(target)
+            # print('target:\n',target)
             # 前向传播计算
             pred = lenet(data)
             # torch.max(a,1) 返回每一行中最大值的那个元素，且返回其索引
             _,output = torch.max(pred, 1)
+            # print('pred_result: \n', output)
             # print('target: \n',target) # 数字表示类别
             # print('pred: \n',pred) # one-hot编码表示类别
             # 计算损失
             loss = loss_fn(pred,target)
+            # print('pred_loss: \n', loss)
             
             # 反向传播和参数更新
             optimizer.zero_grad() # 清空上一次梯度
+            # if lenet.conv3.weight.grad is not None:
+            #     print('conv3_weights.grad zero: \n', lenet.conv3.weight.grad[0][0])
             loss.backward()	# 反向传播
             optimizer.step() # 优化器参数更新
+            # print('conv3_weights.grad: \n', lenet.conv3.weight.grad[0][0])
+            # print('conv1_weights.grad: \n', lenet.conv1.weight.grad[0][0])
+            # print('conv3_weights: \n', lenet.conv3.weight[0][0])
+            '''
+            print('fc2_weights: \n', lenet.fc2.weight[0][0:10])
+            print('fc2_weights.grad: \n', lenet.fc2.weight.grad[0][0:20])
+            print('fc1_weights: \n', lenet.fc1.weight[0][0:10])
+            print('fc1_weights.grad: \n', lenet.fc1.weight.grad[0][0:20])
+            print('conv3_weights.grad: \n', lenet.conv3.weight.grad[0])
+            print('conv2_weights.grad: \n', lenet.conv2.weight.grad[0])
+            print("-"*10)
+            '''
+            # print('fc2_weights: \n', lenet.fc2.weight[0][0:10])
 
-            # total += target.size(0)
+
             running_loss += loss.item()
             # 记录输出的数据正确的个数
             running_correct += (output == target).sum().item()
-            if t%50==0 and t!=0:
-                print("Loss is:{:.4f}, Train Accuracy is:{:.4f}%".format(running_loss/(t*64.0),100.0*running_correct/(t*64.0)))
+            if t%20==0 and t!=0:
+                print("Step/Epoch:{}/{}, Loss is:{:.4f}, Train Accuracy is:{:.4f}%".format(t, epoch, running_loss/(t*64.0), 100.0*running_correct/(t*64.0)))
+                # print('conv2_weights: \n', lenet.conv2.weight)
+                print('conv1_weights: \n', lenet.conv1.weight)
+                print('conv2_weights: \n', lenet.conv2.weight)
             #     print(100*running_correct.data/total)
     
         testing_correct = 0

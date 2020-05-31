@@ -29,6 +29,7 @@ class Parameter(object):
     def zero_grad(self):
         if self.requires_grad:
             self.grad = np.zeros(self.data.shape)
+            # print('zero_grad result: \n', self.grad)
 
 
 # class Parameter(np.ndarray):

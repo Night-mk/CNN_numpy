@@ -64,7 +64,8 @@ class Module(object):
         #         "the forward() method.".format(name))
         else:
             self._parameters[name] = param
-            # print('param',self._parameters)
+            # print('param type: ',type(param))
+            # print('id param: ', id(param))
 
     '''
         设置module实例的属性来注册模块和参数
@@ -82,7 +83,7 @@ class Module(object):
         # print('value: ',value)
         params = self.__dict__.get('_parameters')
         if isinstance(value, Parameter):
-            print('param_name: ',name)
+            # print('param_name: ',name)
             if params is None:
                 raise AttributeError(
                     "cannot assign parameters before Module.__init__() call")
@@ -98,7 +99,7 @@ class Module(object):
         else:
             modules = self.__dict__.get('_modules')
             if isinstance(value, Module):
-                print('module_list_name: ',name)
+                # print('module_list_name: ',name)
                 if modules is None:
                     raise AttributeError(
                         "cannot assign module before Module.__init__() call")

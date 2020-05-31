@@ -7,3 +7,6 @@ __pycache__/*
 model_save/*
 
 layers/__pycache__/*
+
+study_python.py
+Lenet_component.py
