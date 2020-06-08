@@ -59,7 +59,7 @@ def element_wise_op(array, op):
 class ConvLayer(Module):
     # 初始化卷积层函数
     # 参数包括：输入数据大小[batch大小、通道数、输入高度、输入宽度]，滤波器宽度、滤波器高度、滤波器数目、补零数目、步长、学习速率、补零方法
-    def __init__(self, in_channels, out_channels, filter_width, filter_height, zero_padding, stride, method='VALID'):
+    def __init__(self, in_channels, out_channels, filter_width, filter_height, zero_padding, stride, method='VALID', bias_required=True):
         super(ConvLayer, self).__init__()
         # input_array 4d tensor [batch, channel, height, width]
         self.in_channels = in_channels
@@ -70,13 +70,17 @@ class ConvLayer(Module):
         self.zero_padding = zero_padding  # 补0圈数
         self.stride = stride # 步幅
         self.method = method
+        self.bias_required = bias_required
 
         # 卷积层过滤器初始化
         '''filter_num = output_channel,就是卷积输出feature map的通道数'''
         param_weights = np.random.uniform(-1e-2, 1e-2,(self.out_channels, self.in_channels, self.filter_height, self.filter_width))
-        param_bias = np.zeros(self.out_channels)
         self.weights = Parameter(param_weights, requires_grad=True)
-        self.bias = Parameter(param_bias, requires_grad=True)
+        if self.bias_required:
+            param_bias = np.zeros(self.out_channels)
+            self.bias = Parameter(param_bias, requires_grad=True)
+        else:
+            self.bias = None
 
     # 设置特定的权重和偏移量
     def set_weight(self, weight):
@@ -84,9 +88,10 @@ class ConvLayer(Module):
             self.weights = weight
 
     def set_bias(self, bias):
-        if isinstance(bias, Parameter):
+        if isinstance(bias, Parameter) and self.bias_required:
             self.bias = bias
 
+    # kaiming均匀分布初始化参数
     def kaiming_uniform(self, fan_in, shape, a=0):
         bound = np.sqrt(6/((1+a**2)*fan_in))
         return np.random.uniform(-bound, bound, shape)
@@ -122,17 +127,20 @@ class ConvLayer(Module):
         self.output_array = np.zeros((self.batchsize ,self.out_channels, self.output_height, self.output_width))
 
         '''使用kaiming初始化'''
+        '''
         fan_in = self.in_channels*self.input_height*self.input_width
         # fan_out = self.out_channels*self.output_height*self.output_width
         param_weights = self.kaiming_uniform(fan_in, shape=(self.out_channels, self.in_channels, self.filter_height, self.filter_width))
         self.weights = Parameter(param_weights, requires_grad=True)
         param_bias = self.kaiming_uniform(fan_in, shape=(self.out_channels))
         self.bias = Parameter(param_bias, requires_grad=True)
+        '''
 
         '''计算卷积'''
         # 转换filter为矩阵, 将每个filter拉为一列, filter [Cout,depth,height,width]
         weights_col = self.weights.data.reshape([self.out_channels, -1])
-        bias_col = self.bias.data.reshape([self.out_channels, -1])
+        if self.bias_required:
+            bias_col = self.bias.data.reshape([self.out_channels, -1])
 
         # padding方法计算填充关系
         input_pad = padding(input_array, self.method, self.zero_padding)
@@ -151,7 +159,10 @@ class ConvLayer(Module):
             '''
             # print('input_col_i.shape: \n',input_col_i.shape)
             # print('conv_result: \n',np.dot(weights_col, input_col_i))
-            conv_out_i = np.dot(weights_col, input_col_i)+bias_col #计算矩阵卷积，输出大小为[Cout,(H-k+1)*(W-k+1)]的矩阵输出
+            if self.bias_required:
+                conv_out_i = np.dot(weights_col, input_col_i)+bias_col #计算矩阵卷积，输出大小为[Cout,(H-k+1)*(W-k+1)]的矩阵输出
+            else:
+                conv_out_i = np.dot(weights_col, input_col_i)
             conv_out[i] = np.reshape(conv_out_i, self.output_array[0].shape) #转换为[Cout,Hout,Wout]的输出
             self.input_col.append(input_col_i) #记录输入数据的col形式，用于反向传播？？(暂时未知)
         self.input_col = np.array(self.input_col)
@@ -177,7 +188,8 @@ class ConvLayer(Module):
         '''计算b的梯度矩阵'''
         # print('eta_col: \n',eta_col)
         # print('eta.shape: \n',self.eta.shape)
-        self.bias.grad += np.sum(eta_col, axis=(0, 2))
+        if self.bias_required:
+            self.bias.grad += np.sum(eta_col, axis=(0, 2))
         
         """计算传输到上一层的误差"""
         ## 针对stride>=2时对误差矩阵的填充，需要在每个误差数据中间填充(stride-1) ##
@@ -214,25 +226,30 @@ class ConvLayer(Module):
         # 参数矩阵需要维度转换 W[Cout,Cin,h,w]->W[Cin,Cout,h,w]这样变化为col矩阵的时候，可以直接使用reshape(channel_num, -1)获得对应的矩阵大小，并完成和填充误差进行卷积计算获得L-1层的误差
         flip_weights = flip_weights.swapaxes(0, 1)
         flip_weights_col = flip_weights.reshape([self.in_channels, -1])
-        eta_pad_col = []
+        # eta_pad_col = []
+        ## 计算向上一层传播的误差eta_next,采用卷积乘计算
+        # 原本，delta_Z^(l)=delta_Z^(l+1) conv rot180(W^(l))
+        eta_next = []
         for i in range(0, self.batchsize):
             eta_pad_col_i = img2col(eta_pad[i][np.newaxis,:], self.filter_width, 1, self.zero_padding)
-            # print('eta_pad_col_i.shape: \n', eta_pad_col_i.shape)
-            eta_pad_col.append(eta_pad_col_i)
-        eta_pad_col = np.array(eta_pad_col)
+            eta_next_i = np.dot(flip_weights_col, eta_pad_col_i)
+            eta_next.append(eta_next_i)
+            # eta_pad_col.append(eta_pad_col_i)
+        self.eta_next = np.array(eta_next)
+        # eta_pad_col = np.array(eta_pad_col)
         # print('flip_weights_col.shape: \n',flip_weights_col.shape)
         # print('eta_pad_col.shape: \n',eta_pad_col.shape)
 
-        ## 计算向上一层传播的误差eta_next,采用卷积乘计算
-        # 原本，delta_Z^(l)=delta_Z^(l+1) conv rot180(W^(l))
-        # 这里没有像前向计算里的那种batchsize的概念了，batch刚好把行向量补齐
-        eta_next = np.dot(flip_weights_col, eta_pad_col)
+        # eta_next = []
+        # for i in range(0, self.batchsize):
+        #     eta_next_i = np.dot(flip_weights_col, eta_pad_col[i])
+        #     eta_next.append(eta_next_i)
+        # self.eta_next = np.array(eta_next)
         # print('eta_next.shape:\n', eta_next.shape)
         # input_shape就是上一层的output_shape
-        eta_next = np.reshape(eta_next, self.input_shape)
+        self.eta_next = self.eta_next.reshape(self.input_shape)
 
-        self.eta_next = eta_next
-        return eta_next
+        return self.eta_next
 
 def unit_test():
     print("------test-------")

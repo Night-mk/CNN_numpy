@@ -19,7 +19,6 @@ import Pool
 import Activators
 import FC
 import BN
-import BN_other
 import Deconv
 import numpy as np
 from Parameter import Parameter
@@ -98,6 +97,7 @@ def loss_test():
 '''
     验证：卷积计算Conv（成功）
     测试了多种条件（stride,padding,batch）变化下的卷积正确性
+    测试时需要注释掉Conv.py中的kaiming初始化
 '''
 def conv_test():
     # 自定义卷积核和偏移量，使用pytorch计算卷积，和反向传播结果
@@ -107,9 +107,14 @@ def conv_test():
     w_numpy = w.detach().numpy()
     b_numpy = b.detach().numpy()
 
+    w_2 = torch.rand(5, 5, 3, 3)  # 5种5通道的3乘3卷积核
+    b_2 = torch.rand(5)  # 和卷积核种类数保持一致(不同通道共用一个bias)
+    w_numpy_2 = w_2.detach().numpy()
+    b_numpy_2 = b_2.detach().numpy()
+
     """定义输入样本"""
     # 单张图片输入
-    x = torch.tensor(np.random.randn(1, 3, 5, 5).astype(np.float32), requires_grad=True)  # 1张3通道的5乘5的图像
+    x = torch.tensor(np.random.randn(3, 3, 5, 5).astype(np.float32), requires_grad=True)  # 1张3通道的5乘5的图像
     # 多张图片输入
     # x = torch.tensor(np.random.randn(2, 3, 5, 5).astype(np.float32), requires_grad=True)  # 2张3通道的5乘5的图像
     x_numpy = x.detach().numpy()
@@ -124,17 +129,22 @@ def conv_test():
     ## padding=0 stride=0
     # cl_tensor = torch.nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=0)
     ## padding=1 stride=1
-    cl_tensor = torch.nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=1)
+    cl_tensor_1 = torch.nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=1)
     ## stride=2 padding=0
-    # cl_tensor = torch.nn.Conv2d(3, 5, kernel_size=3, stride=2, padding=0)
+    # cl_tensor_1 = torch.nn.Conv2d(3, 5, kernel_size=3, stride=2, padding=0)
     ## stride=2 padding=1
     # cl_tensor = torch.nn.Conv2d(3, 5, kernel_size=3, stride=2, padding=1)
     ## stride=1 padding=2
-    # cl_tensor = torch.nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=2)
+    # cl_tensor_1 = torch.nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=2)
+    cl_tensor_2 = torch.nn.Conv2d(5, 5, kernel_size=3, stride=1, padding=0)
 
-    cl_tensor.weight = torch.nn.Parameter(w, requires_grad=True)
-    cl_tensor.bias = torch.nn.Parameter(b, requires_grad=True)
-    conv_out_tensor = cl_tensor(x)
+    cl_tensor_1.weight = torch.nn.Parameter(w, requires_grad=True)
+    cl_tensor_1.bias = torch.nn.Parameter(b, requires_grad=True)
+    cl_tensor_2.weight = torch.nn.Parameter(w_2, requires_grad=True)
+    cl_tensor_2.bias = torch.nn.Parameter(b_2, requires_grad=True)
+
+    conv_out_tensor_1 = cl_tensor_1(x)
+    conv_out_tensor_2 = cl_tensor_2(conv_out_tensor_1)
     # numpy计算卷积前向传播
     ## padding=0 stride=0
     # cl1 = Conv.ConvLayer(3, 5, 3, 3, zero_padding=0, stride=1, method='VALID')
@@ -146,57 +156,150 @@ def conv_test():
     # cl1 = Conv.ConvLayer(3, 5, 3,3, zero_padding=1, stride=2, method='SAME')
     ## stride=1 padding=2
     # cl1 = Conv.ConvLayer(3, 5, 3,3, zero_padding=2, stride=1, method='SAME')
+    cl2 = Conv.ConvLayer(5, 5, 3,3, zero_padding=0, stride=1, method='VALID')
 
     cl1.set_weight(Parameter(w_numpy, requires_grad=True))
     cl1.set_bias(Parameter(b_numpy, requires_grad=True))
-    conv_out_numpy = cl1.forward(x_numpy) # forward 
-    print('conv_out_numpy.shape: ',conv_out_numpy.shape)
+    cl2.set_weight(Parameter(w_numpy_2, requires_grad=True))
+    cl2.set_bias(Parameter(b_numpy_2, requires_grad=True))
+
+    conv_out_numpy_1 = cl1.forward(x_numpy) # forward
+    print('conv_out_numpy_1.shape: ',conv_out_numpy_1.shape)
+    conv_out_numpy_2 = cl2.forward(conv_out_numpy_1) 
+    print('conv_out_numpy_2.shape: ',conv_out_numpy_2.shape)
+
+    # 输出结果对比
+    print('-----对比输出-----')
+    print('conv_out_tensor_1: \n', conv_out_tensor_1[0][0])
+    # print('conv_out_tensor_1.shape: \n', conv_out_tensor_1.shape)
+    # print('conv_out_numpy_1: \n', conv_out_numpy_1)
+    # print('conv_out_numpy_1.shape: \n', conv_out_numpy_1.shape)
+    print('conv_out_1 error: \n', conv_out_numpy_1-conv_out_tensor_1.detach().numpy())
+
+    print('conv_out_tensor_2: \n', conv_out_tensor_2[0][0])
+    # print('conv_out_tensor_2.shape: \n', conv_out_tensor_2.shape)
+    print('conv_out_numpy_2: \n', conv_out_numpy_2[0][0])
+    # print('conv_out_numpy_2.shape: \n', conv_out_numpy_2.shape)
+    print('conv_out_2 error: \n', conv_out_numpy_2-conv_out_tensor_2.detach().numpy())
+
+    # print('conv_out_2 weight error: \n', cl2.weights.data-cl_tensor_2.weight.detach().numpy())
+    # print('conv_out_2 bias error: \n', cl2.bias.data-cl_tensor_2.bias.detach().numpy())
+
     
     """梯度计算"""
     """定义输出误差"""
-    ## 单张误差
-    # dy = torch.tensor(np.random.randn(1,5,3,3).astype(np.float32), requires_grad=True).float()
-    ## 多张误差
-    # dy = torch.tensor(np.random.randn(2,5,3,3).astype(np.float32), requires_grad=True).float()
-    ## padding=1误差
-    dy_numpy = np.random.random(conv_out_numpy.shape).astype(np.float32)
+    dy_numpy = np.random.random(conv_out_numpy_2.shape).astype(np.float32)
     dy = torch.tensor(dy_numpy, requires_grad=True).float()
     # print('dy: \n', dy_numpy)
     print('dy.shape: \n', dy_numpy.shape)
 
-    # pytorch 计算卷积反向传播
-    conv_out_tensor.backward(dy)
-    x_grad = x.grad
-    w_grad = cl_tensor.weight.grad
-    b_grad = cl_tensor.bias.grad
-    # numpy 计算卷积反向传播
-    x_grad_numpy = cl1.gradient(dy_numpy)
-    w_grad_numpy = cl1.weights.grad
-    b_grad_numpy = cl1.bias.grad
-    # cl1.backward() 
+    ## pytorch 计算卷积反向传播
+    conv_out_tensor_2.backward(dy)
+    # conv_out_tensor_1.backward(dy_grad)
+    # dy.backward()
+    # x_grad_1 = x.grad
+    w_grad_1 = cl_tensor_1.weight.grad
+    b_grad_1 = cl_tensor_1.bias.grad
+    w_grad_2 = cl_tensor_2.weight.grad
+    b_grad_2 = cl_tensor_2.bias.grad
 
-    # 输出结果对比
-    print('-----对比输出-----')
-    print('conv_out_tensor: \n', conv_out_tensor)
-    print('conv_out_tensor.shape: \n', conv_out_tensor.shape)
+    ## numpy 计算卷积反向传播
+    x_grad_numpy_2 = cl2.gradient(dy_numpy)
+    x_grad_numpy_1 = cl1.gradient(x_grad_numpy_2)
 
-    print('conv_out_numpy: \n', conv_out_numpy)
-    print('conv_out_numpy.shape: \n', conv_out_numpy.shape)
+    w_grad_numpy_2 = cl2.weights.grad
+    b_grad_numpy_2 = cl2.bias.grad
+    
+    w_grad_numpy_1 = cl1.weights.grad
+    b_grad_numpy_1 = cl1.bias.grad
+
+    
     
     print('-----对比x_grad-----')
-    print('x_grad: \n', x_grad)
-    print('x_grad.shape: \n', x_grad.shape)
+    # print('x_grad: \n', x_grad)
+    # print('x_grad.shape: \n', x_grad.shape)
 
-    print('x_grad_numpy: \n', x_grad_numpy)
-    print('x_grad_numpy.shape: \n', x_grad_numpy.shape)
+    # print('x_grad_numpy: \n', x_grad_numpy_1)
+    # print('x_grad_numpy.shape: \n', x_grad_numpy_1.shape)
+
+    # print('x_grad error mean: \n', np.mean(x_grad_numpy-x_grad.detach().numpy(), axis = 3))
+    # print('x_grad error shape: \n', np.mean(x_grad_numpy-x_grad.detach().numpy(), axis = 3).shape)
 
     print('-----对比w_grad-----')
-    print('w_grad: \n', w_grad)
-    print('w_grad_numpy: \n', w_grad_numpy)
+    # print('w_grad: \n', w_grad_1)
+    # print('w_grad_numpy: \n', w_grad_numpy_1)
+    print('w_grad_1 error: \n', w_grad_numpy_1-w_grad_1.detach().numpy())
+    print('w_grad_2 error: \n', w_grad_numpy_2-w_grad_2.detach().numpy())
 
     print('-----对比b_grad-----')
-    print('b_grad: \n', b_grad)
-    print('b_grad_numpy: \n', b_grad_numpy)
+    # print('b_grad: \n', b_grad_1)
+    # print('b_grad_numpy: \n', b_grad_numpy_1)
+
+    print('b_grad_1 error: \n', b_grad_numpy_1-b_grad_1.detach().numpy())
+    print('b_grad_2 error: \n', b_grad_numpy_2-b_grad_2.detach().numpy())
+
+
+'''
+    Conv梯度检测
+'''
+def conv_checkgrad():
+    """梯度检测"""
+    eps = 1e-4
+
+    """手动定义卷积核(weight)和偏置"""
+    w = torch.rand(5, 3, 3, 3)  # 5种3通道的3乘3卷积核
+    b = torch.rand(5)  # 和卷积核种类数保持一致(不同通道共用一个bias)
+    w_numpy = w.detach().numpy()
+    b_numpy = b.detach().numpy()
+
+    """定义输入样本"""
+    x = torch.tensor(np.random.randn(1, 3, 3, 3).astype(np.float32), requires_grad=True)  # 1张3通道的5乘5的图
+    x_numpy = x.detach().numpy()
+
+    """卷积初始化"""
+    cl_tensor_1 = torch.nn.Conv2d(3, 5, kernel_size=3, stride=1, padding=0)
+    cl_tensor_1.weight = torch.nn.Parameter(w, requires_grad=True)
+    cl_tensor_1.bias = torch.nn.Parameter(b, requires_grad=True)
+
+    cl1 = Conv.ConvLayer(3, 5, 3,3, zero_padding=0, stride=1, method='VALID')
+
+    # cl2 = Conv.ConvLayer(3, 5, 3,3, zero_padding=1, stride=1, method='SAME')
+    # cl3 = Conv.ConvLayer(3, 5, 3,3, zero_padding=1, stride=1, method='SAME')
+
+    cl1.set_weight(Parameter(w_numpy, requires_grad=True))
+    cl1.set_bias(Parameter(b_numpy, requires_grad=True))
+    # cl2.set_weight(Parameter(w_numpy, requires_grad=True))
+    # cl2.set_bias(Parameter(b_numpy, requires_grad=True))
+    # cl3.set_weight(Parameter(w_numpy, requires_grad=True))
+    # cl3.set_bias(Parameter(b_numpy, requires_grad=True))
+
+    conv_out_tensor_1 = cl_tensor_1(x)
+    conv_out_numpy_1 = cl1.forward(x_numpy) # forward
+    # conv_out_numpy_2 = cl2.forward(x_numpy-eps) # forward
+    # conv_out_numpy_3 = cl3.forward(x_numpy+eps) # forward
+
+    print('-----对比输出-----')
+    print('conv_out_tensor_1: \n', conv_out_tensor_1)
+    # print('conv_out_tensor_1.shape: \n', conv_out_tensor_1.shape)
+    print('conv_out_numpy_1: \n', conv_out_numpy_1)
+    # print('conv_out_numpy_1.shape: \n', conv_out_numpy_1.shape)
+    print('conv_out_1 error: \n', conv_out_numpy_1-conv_out_tensor_1.detach().numpy())
+
+    """梯度计算"""
+    """定义输出误差"""
+    dy_numpy = np.ones(conv_out_numpy_1.shape).astype(np.float32)
+    dy = torch.tensor(dy_numpy, requires_grad=True).float()
+
+    x_grad = cl1.gradient(dy_numpy)
+    
+    # x_grad_check = (conv_out_numpy_1-conv_out_numpy_2)/2/eps
+
+    # print("-------梯度检测-------")
+    # print('x_grad: \n',x_grad)
+    # print('x_grad_check: \n',x_grad_check)
+    # print('x_grad_check error: \n',x-x_grad_check)
+
+
 
 
 '''
@@ -235,12 +338,22 @@ def bn_test():
     """定义输入"""
     x_numpy = np.random.randn(1,5,2,2).astype(np.float32)
     x = torch.tensor(x_numpy, requires_grad=True)
+    """定义参数"""
+    w_numpy = np.random.normal(1.0, 0.02, size=(5)).astype(np.float32)
+    w = torch.tensor(w_numpy, requires_grad=True)
+    b_numpy = np.zeros(5).astype(np.float32)
+    b = torch.tensor(b_numpy, requires_grad=True)
     # 初始化
     # pytorch (需要添加affine=False参数)
     # affine定义了BN层的参数γ和β是否是可学习的(不可学习默认是常数1和0). 通常需要设置为True，但测试时numpy的γ=1和β=0，故此时需要将参数设置为False
-    bn_tensor = torch.nn.BatchNorm2d(5, affine=False)
+    # bn_tensor = torch.nn.BatchNorm2d(5, affine=False)
+    bn_tensor = torch.nn.BatchNorm2d(5, affine=True)
+    bn_tensor.weight = torch.nn.Parameter(w, requires_grad=True)
+    bn_tensor.bias = torch.nn.Parameter(b, requires_grad=True)
     # numpy
     bn_numpy = BN.BatchNorm(5)
+    bn_numpy.set_gamma(Parameter(w_numpy, requires_grad=True))
+    bn_numpy.set_beta(Parameter(b_numpy, requires_grad=True))
     """计算前向传播"""
     bn_out_tensor = bn_tensor(x)
     bn_out_numpy = bn_numpy.forward(x_numpy,'train')
@@ -253,21 +366,38 @@ def bn_test():
     # pytorch
     bn_out_tensor.backward(dy)
     x_grad_tensor = x.grad
+    w_grad_tensor = bn_tensor.weight.grad
+    b_grad_tensor = bn_tensor.bias.grad
+
     # numpy
     x_grad_numpy = bn_numpy.gradient(dy_numpy)
+    w_grad_numpy = bn_numpy.gamma.grad
+    b_grad_numpy = bn_numpy.beta.grad
     
     
     """打印输出"""
     print('-----对比输出-----')
     print('bn_out_tensor: \n',bn_out_tensor)
-    print('bn_out_tensor: \n',bn_out_tensor.shape)
+    print('bn_out_tensor.shape: \n',bn_out_tensor.shape)
     print('bn_out_numpy: \n',bn_out_numpy)
-    print('bn_out_numpy: \n',bn_out_numpy.shape)
+    print('bn_out_numpy.shape: \n',bn_out_numpy.shape)
+    print('bn_out_error: \n', bn_out_numpy-bn_out_tensor.detach().numpy())
 
     print('-----对比x_grad-----')
     print('x_grad_tensor: \n',x_grad_tensor)
     print('x_grad_numpy: \n',x_grad_numpy)
+    print('x_grad_error: \n', x_grad_numpy-x_grad_tensor.detach().numpy())
 
+    print('-----对比w_grad-----')
+    print('w_grad_tensor: \n',w_grad_tensor)
+    print('w_grad_numpy: \n',w_grad_numpy)
+    print('w_grad_error: \n', w_grad_numpy-w_grad_tensor.detach().numpy())
+
+    print('-----对比b_grad-----')
+    print('b_grad_tensor: \n',b_grad_tensor)
+    print('b_grad_numpy: \n',b_grad_numpy)
+    print('b_grad_error: \n', b_grad_numpy-b_grad_tensor.detach().numpy())
+    
 
 '''
     验证：全连接层FC（成功）
@@ -326,6 +456,8 @@ def fc_test():
     print('x_grad_numpy: \n',x_grad_numpy)
     print('x_grad_numpy_shape: \n',x_grad_numpy.shape)
 
+    print('x_grad error: \n',x_grad_numpy-x_grad.detach().numpy())
+
     print('-----对比w_grad-----')
     print('w_grad: \n',w_grad)
     print('w_grad shape: \n',w_grad.shape)
@@ -371,6 +503,8 @@ def pooling_test():
     print('pool_out_numpy_grad: \n', pool_eta)
     print('pool_out_numpy_grad.shape: \n', pool_eta.shape)
 
+    print('pool_out_numpy_grad error: \n', pool_eta-x.grad.detach().numpy())
+
 
 '''
     验证：反卷积层Deconv（成功）
@@ -391,7 +525,7 @@ def deconv_test():
     """定义输入样本"""
     # x_numpy = np.random.randn(1,3,4,4).astype(np.float32)
     # x_numpy = np.random.randn(1,3,2,2).astype(np.float32)
-    x_numpy = np.ones((1,3,2,2)).astype(np.float32)
+    x_numpy = np.ones((2,3,2,2)).astype(np.float32)
     x = torch.tensor(x_numpy, requires_grad=True)
 
     '''前向传播'''
@@ -403,18 +537,21 @@ def deconv_test():
     deconv_out_tensor = decl_tensor(x)
     
     ## numpy
-    # decl_numpy = Deconv.Deconv(x_numpy.shape, out_channel=5, filter_size=4,  zero_padding=1, stride=2, learning_rate=0.0001)
+    # decl_numpy = Deconv.Deconv(3, 5, filter_size=4,  zero_padding=1, stride=2)
     decl_numpy = Deconv.Deconv(3, out_channels=5, filter_size=3,  zero_padding=0, stride=1)
     decl_numpy.set_weight(Parameter(w_numpy, requires_grad=True))
     decl_numpy.set_bias(Parameter(b_numpy, requires_grad=True))
     deconv_out_numpy = decl_numpy.forward(x_numpy)
 
     print('-----对比输出-----')
-    print('deconv_out_tensor: \n', deconv_out_tensor)
+    print('deconv_out_tensor: \n', deconv_out_tensor[0])
     print('deconv_out_tensor.shape: \n', deconv_out_tensor.shape)
 
-    print('deconv_out_numpy: \n', deconv_out_numpy)
+    print('deconv_out_numpy: \n', deconv_out_numpy[0])
     print('deconv_out_numpy.shape: \n', deconv_out_numpy.shape)
+
+    print('deconv_out_error: \n', deconv_out_numpy-deconv_out_tensor.detach().numpy())
+
 
     '''反向传播'''
     dy_numpy = np.random.random(deconv_out_numpy.shape).astype(np.float32)
@@ -428,19 +565,23 @@ def deconv_test():
 
     ## numpy
     x_grad_numpy = decl_numpy.gradient(dy_numpy)
-    w_grad_numpy = decl_numpy.weights_grad
-    b_grad_numpy = decl_numpy.bias_grad
+    w_grad_numpy = decl_numpy.weights.grad
+    b_grad_numpy = decl_numpy.bias.grad
 
     print('-----对比x_grad-----')
-    print('x_grad: \n', x_grad)
+    print('x_grad: \n', x_grad[0])
     print('x_grad.shape: \n', x_grad.shape)
 
-    print('x_grad_numpy: \n', x_grad_numpy)
+    print('x_grad_numpy: \n', x_grad_numpy[0])
     print('x_grad_numpy.shape: \n', x_grad_numpy.shape)
+
+    print('x_grad_error: \n', x_grad_numpy-x_grad.detach().numpy())
 
     print('-----对比w_grad-----')
     print('w_grad: \n', w_grad)
     print('w_grad_numpy: \n', w_grad_numpy)
+
+    print('w_grad_error: \n', w_grad_numpy.transpose((1,0,2,3))-w_grad.detach().numpy())
 
     print('-----对比b_grad-----')
     print('b_grad: \n', b_grad)
@@ -452,8 +593,10 @@ def deconv_test():
 if __name__ == '__main__':
     # loss_test()
     # conv_test()
+    # conv_checkgrad()
     # ac_test()
-    # bn_test()
-    fc_test()
+    bn_test()
+    # fc_test()
     # pooling_test()
     # deconv_test()
+    

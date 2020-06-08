@@ -6,6 +6,7 @@ import random
 import numpy as np
 from Module import Module
 from Optimizer_func import SGD
+from Optimizer_func import Adam
 from Parameter import Parameter
 from Conv import ConvLayer
 from Pool import MaxPooling
@@ -21,6 +22,11 @@ import time
 
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils # 暂时不知道干嘛的（处理图像用的？）
+
+
+n_epochs = 1 # 训练轮数
+n_epochs_pre = 0 # 预训练轮数（加载已经训练好的模型时可以更新）
+batch_size = 64
 
 class Lenet_numpy(Module):
     def __init__(self, in_dim, n_class):
@@ -78,8 +84,8 @@ if __name__ == "__main__":
                               ]))
     print('traindata_len: \n',len(train_dataset))
     # 构建数据集迭代器
-    train_loader = torch.utils.data.DataLoader(train_dataset,batch_size=64,shuffle=True)
-    test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=64,shuffle=True)
+    train_loader = torch.utils.data.DataLoader(train_dataset,batch_size=batch_size,shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=batch_size,shuffle=True)
 
     '''
     device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
@@ -95,25 +101,32 @@ if __name__ == "__main__":
     plt.show()
     '''
 
-
     """初始化CNN网络"""
     Lenet = Lenet_numpy(in_dim=1, n_class=10)
     print('Lenet_numpy: \n', Lenet)
 
-
     """构建优化器"""
     loss_fn = NLLLoss()
     # optimizer = SGD(Lenet.parameters(), learning_rate=1e-2, momentum=0.5)
-    optimizer = SGD(Lenet.parameters(), learning_rate=1e-2, momentum=0.5)
+    # optimizer = SGD(Lenet.parameters(), learning_rate=1e-2, momentum=0.9) # momentum改为0.9训练更快
+    lr = 1e-3# Adam优化器的学习率
+    beta1 = 0.5 # Adam优化器的参数（需要调整试试？）
+    optimizer = Adam(Lenet.parameters(), learning_rate=lr, betas=(beta1, 0.999)) # 测试一下Adam优化器
     # for param in Lenet.parameters():
     #     print('parameters() id: ', id(param))
-    # print('conv1.param weight id: ',id(Lenet.conv1.weights))
-    # print('conv1.param bias id: ',id(Lenet.conv1.bias))
+    # print(Lenet.state_dict())
 
-    """迭代训练"""
-    n_epochs = 1
+    """加载预训练的模型"""
+    '''
+    pre_module_path = "./model_save/lenet_numpy_parameters-1.pkl"
+    params = torch.load(pre_module_path)
+    Lenet.load_state_dict(params['state_dict']) # 加载模型
+    n_epochs_pre = params['epoch']
+    '''
     
+    """迭代训练"""
     for epoch in range(n_epochs):
+        # break
         running_loss = 0.0
         running_correct = 0
         print("Epoch {}/{}".format(epoch, n_epochs))
@@ -136,27 +149,10 @@ if __name__ == "__main__":
             # print('loss_result: \n', loss)
 
             optimizer.zero_grad()
-            # print('conv3_weights.grad zero: \n', Lenet.conv3.weights.grad[0][0])
             dy_loss = loss_fn.gradient()
             # print('dy_loss: \n', dy_loss)
             Lenet.backward(dy_loss)
             optimizer.step()
-            # print('conv1_weights: \n', Lenet.conv1.weights.data[0])
-            '''
-            print('logsoftmax grad: \n', Lenet.logsoftmax.eta_next[0])
-            print('fc2 weight: \n', Lenet.fc2.weights.data[0])
-            print('fc2 weight.grad: \n', Lenet.fc2.weights.grad[0])
-            print('fc2 eta_next: \n', Lenet.fc2.eta_next[0][0:10])
-            print("-"*10+"end"+"-"*10)
-            '''
-            '''
-            print('fc1 grad: \n', Lenet.fc1.eta_next[0][0:10])
-            print('fc1 weight: \n', Lenet.fc1.weights.data[0][0:10])
-            # print('relu grad: \n', Lenet.relu3.eta_next)
-            print('conv3_weights.grad: \n', Lenet.conv3.weights.grad[0][0])
-            print('conv2_weights.grad: \n', Lenet.conv2.weights.grad[0][0])
-            print("-"*30)
-            '''
 
             # 计算总损失
             running_loss += loss
@@ -164,31 +160,20 @@ if __name__ == "__main__":
             
             if t%20==0 and t!=0:
                 end_time = time.time()
-                print("Step/Epoch:{}/{}, Loss is:{:.4f}, Train Accuracy is:{:.4f}%, Calculate time: {:.4f}min".format(t, epoch ,running_loss/(t*64.0), 100.0*running_correct/(t*64.0), (end_time-start_time)/60))
+                print("Step/Epoch:{}/{}, Loss is:{:.4f}, Train Accuracy is:{:.4f}%, Calculate time: {:.4f}min".format(t, epoch,running_loss/(t*batch_size), 100.0*running_correct/(t*batch_size), (end_time-start_time)/60))
 
-                # print('fc2 grad: \n', Lenet.fc2.eta_next[0][0:10])
-                # print('fc1 grad: \n', Lenet.fc1.eta_next[0][0:10])
-                # print('conv3_weights.grad: \n', Lenet.conv3.weights.grad[0])
-                # print('conv2_weights.grad: \n', Lenet.conv3.weights.grad[0])
-                # print('conv1_weights.grad: \n', Lenet.conv1.weights.grad[0][0])
+        testing_correct = 0
+        for t, (data, target) in enumerate(test_loader):
+            x_test = data.detach().numpy()
+            y_test = target.detach().numpy()
+            pred = Lenet.forward(x_test)
+            output = np.argmax(pred, axis=1)
+            testing_correct += sum(output == y_test) 
 
-                # print('fc1 weight: \n', Lenet.fc1.weights.data[0][0:10])
-                # print('fc2 weight: \n', Lenet.fc2.weights.data[0][0:10])
-                # print('conv1_weights: \n', Lenet.conv1.weights.data)
-                # print('conv2_weights: \n', Lenet.conv2.weights.data)
-                # print("-"*30)
-                # break
-
-            # print("-"*10+"end"+"-"*10)
-            '''
-            if t%300==0 and t!=0:
-                testing_correct = 0
-                for t, (data, target) in enumerate(test_loader):
-                    x_test = data.detach().numpy()
-                    y_test = target.detach().numpy()
-                    pred = Lenet.forward(x_test)
-                    output = np.argmax(pred, axis=1)
-                    testing_correct += sum(output == y_test) 
-
-                print("Loss is:{:.4f}, Train Accuracy is:{:.4f}%, Test Accuracy is:{:.4f}%".format(running_loss/len(train_dataset),100.0*running_correct/len(train_dataset),100.0*testing_correct/len(test_dataset)))
-            '''
+        print("Loss is:{:.4f}, Train Accuracy is:{:.4f}%, Test Accuracy is:{:.4f}%".format(running_loss/len(train_dataset),100.0*running_correct/len(train_dataset),100.0*testing_correct/len(test_dataset)))
+        
+    
+    '''存储模型'''
+    checkpoint_path = "./model_save/lenet_numpy_parameters-"+str(n_epochs+n_epochs_pre)+".pkl"
+    torch.save({'epoch':n_epochs+n_epochs_pre, 'state_dict':Lenet.state_dict()}, checkpoint_path)
+    

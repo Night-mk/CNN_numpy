@@ -23,7 +23,7 @@ class Module(object):
     def __init__(self):
         self._parameters = OrderedDict() # 保存保存用户直接设置的parameter
         self._modules = OrderedDict() # 保存子类实例化的模型
-        self._buffers = OrderedDict() # 缓存，保存一些不变的量
+        self._buffers = OrderedDict() # 缓存，保存一些不变的量（暂时用不到）
         self._backward_hooks = OrderedDict() # 钩子技术，提取中间变量
         self._forward_hooks = OrderedDict()
         self.training = True # 使用training值决定前向传播策略
@@ -165,13 +165,26 @@ class Module(object):
 
     '''
         功能：为子模型添加fn方法（递归执行）
+        将Module及其所有的SubModule传进给定的fn函数操作一遍,
+        可以用这个函数来对Module的网络模型参数用指定的方法初始化
     '''
-    # def apply(self, fn):
-    #     # 子模型由.children()方法获得
-    #     for module in self.children():
-    #         module.apply(fn)
-    #     fn(self)
-    #     return self
+    def apply(self, fn):
+        # 子模型由.children()方法获得
+        for module in self.children():
+            module.apply(fn)
+        fn(self)
+        return self
+
+    def children(self):
+        for name, module in self.named_children():
+            yield module
+
+    def named_children(self):
+        memo = set()
+        for name, module in self._modules.items():
+            if module is not None and module not in memo:
+                memo.add(module)
+                yield name, module
 
     '''返回类名'''
     def _get_name(self):
@@ -218,7 +231,6 @@ class Module(object):
 
     ################################################################################
     
-    '''递归地获取Module类中的各类参数'''
     def _named_members(self, get_members_fn, prefix='', recurse=True):
         r"""Helper method for yielding various names + members of modules."""
         memo = set()
@@ -249,6 +261,7 @@ class Module(object):
         for elem in gen:
             yield elem
 
+    '''递归地获取Module类中的各类参数'''
     def named_modules(self, memo=None, prefix=''):
         r"""Returns an iterator over all modules in the network, yielding
         both the name of the module as well as the module itself.
@@ -266,3 +279,42 @@ class Module(object):
                 submodule_prefix = prefix + ('.' if prefix else '') + name
                 for m in module.named_modules(memo, submodule_prefix):
                     yield m
+
+    ##################################################################
+    '''保存模型参数，用于模型存储'''
+    '''存储各个子模型参数（基础方法）'''    
+    def _save_to_state_dict(self, destination, prefix):
+        for name, param in self._parameters.items():
+            if param is not None:
+                destination[prefix+name] = param.data
+
+    '''存储整个模型的参数'''
+    def state_dict(self, destination=None, prefix=''):
+        if destination is None:
+            destination = OrderedDict()
+        self._save_to_state_dict(destination, prefix) # 第一次保存的是整个模型的参数
+        # 递归获取全部子模型的参数
+        for name, module in self._modules.items():
+            if module is not None:
+                module.state_dict(destination, prefix + name + '.')
+        return destination
+
+    '''加载模型参数，用于模型的提取'''
+    def _load_from_state_dict(self, name, param):
+        if self._parameters[name] is not None:
+            # 加载新参数覆盖原始参数
+            self._parameters[name].set_param(param)
+    
+    def load_state_dict(self, param_dict=None, prefix=''):
+        # 设置模型参数
+        if param_dict is not None:
+            for name, param in param_dict.items(): # [module.param (e.g conv1.weights)]
+                name_list = name.split('.')
+                if self._modules[name_list[0]] is not None:
+                    self._modules[name_list[0]]._load_from_state_dict(name_list[1], param)
+                    
+    '''将模型的梯度置为0'''
+    def zero_grad(self):
+        for p in self.parameters():
+            if p.grad is not None:
+                p.zero_grad()

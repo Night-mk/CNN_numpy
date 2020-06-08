@@ -41,6 +41,31 @@ class NLLLoss(Module):
         self.eta_next = -self.eta
         return self.eta_next
 
+
+class BECLoss(Module):
+    # 计算二分类任务的交叉熵损失函数
+    def __init__(self, size_average=True):
+        super(BECLoss, self).__init__()
+        self.size_average = size_average
+    
+    def forward(self, prediction, labels):
+        self.prediction = prediction
+        self.batchsize = self.prediction.shape[0]
+        self.labels = labels
+
+        self.loss = self.labels*np.log(self.prediction)+(1-self.labels)*np.log(1-self.prediction)
+
+        self.loss = -np.sum(self.loss)
+        
+        if self.size_average:
+            self.loss /= self.batchsize
+        
+        return self.loss
+
+    def gradient(self):
+        return self.labels
+
+
 def test_NLLLoss():
     print('-----NLLLoss test-----')
 

@@ -18,12 +18,12 @@ class FullyConnect(Module):
         self.required_bias = required_bias
         '''使用xavier初始化'''
         # 初始化全连接层为输入的weights
-        param_weights = np.random.standard_normal((self.in_num, self.out_num))/100
-        # param_weights = self.xavier_init(self.in_num, self.out_num, (self.in_num, self.out_num))
+        # param_weights = np.random.standard_normal((self.in_num, self.out_num))/100
+        param_weights = self.xavier_init(self.in_num, self.out_num, (self.in_num, self.out_num))
         self.weights = Parameter(param_weights, requires_grad=True)
         # bias初始化为列向量
-        param_bias = np.random.standard_normal(self.out_num)/100
-        # param_bias = self.xavier_init(self.in_num, self.out_num, (self.out_num))
+        # param_bias = np.random.standard_normal(self.out_num)/100
+        param_bias = self.xavier_init(self.in_num, self.out_num, (self.out_num))
         self.bias = Parameter(param_bias, requires_grad=True)
 
     # 设置特定的权重和偏移量
@@ -86,6 +86,8 @@ class FullyConnect(Module):
             self.weights.grad += np.dot(input_col_i, eta_i)
             self.bias.grad += eta_i.reshape(self.bias.data.shape)
 
+        # print('eta shape: \n',self.eta.shape)
+        # print('weight.data shape: \n',self.weights.data.shape)
         # 计算上一层的误差 eta=[batch,out_num], weights=[in_num,out_num]
         self.eta_next = np.dot(self.eta, self.weights.data.T) # eta_next=[batch, in_num]
 

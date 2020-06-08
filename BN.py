@@ -19,9 +19,6 @@ class BatchNorm(Module):
         self.gamma = Parameter(param_gamma, requires_grad=True)
         self.beta = Parameter(param_beta, requires_grad=True)
 
-        self.gamma_grad = self.gamma.grad
-        self.beta_grad = self.beta.grad
-
         self.epsilon = 1e-5
         self.mean = np.zeros(self.in_channels)
         self.var = np.zeros(self.in_channels)
@@ -103,11 +100,10 @@ class BatchNorm(Module):
         # eta = [batch, channel_num, height, width]
         # 无论上层误差如何，首先将上层传输的误差转化为[batch, -1]
         self.eta = eta
-        self.gamma_grad = np.sum(self.eta*self.normed_x, axis=(0,2,3), keepdims=True)
-        self.beta_grad = np.sum(self.eta, axis=(0,2,3), keepdims=True)
-        # 设置Parameter的grad值
-        self.gamma.set_grad(self.gamma_grad)
-        self.beta.set_grad(self.beta_grad)
+        # self.gamma.grad = np.sum(self.eta*self.normed_x, axis=(0,2,3), keepdims=True)
+        self.gamma.grad = np.sum(self.eta*self.normed_x, axis=(0,2,3))
+        # self.beta.grad = np.sum(self.eta, axis=(0,2,3), keepdims=True)
+        self.beta.grad = np.sum(self.eta, axis=(0,2,3))
         # 计算向前一层传播的误差参数
         # normed_x_grad
         # normed_x_grad = self.eta*self.gamma 
@@ -126,13 +122,6 @@ class BatchNorm(Module):
 
         self.eta_next = input_grad
         return input_grad
-
-    '''
-    def backward(self):
-        # 更新gamma和beta
-        self.gamma -= self.learning_rate*self.gamma_grad
-        self.beta -= self.learning_rate*self.beta_grad
-    '''
 
 def basic_test():
     a = np.arange(24).reshape((2,3,2,2))

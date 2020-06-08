@@ -39,15 +39,15 @@ class ReLU(Module):
     LeakyReLU
 '''
 class LeakyReLU(Module):
-    def __init__(self, input_shape, alpha=0.01):
+    def __init__(self, alpha1=0.01):
         # self.input_array = np.zeros(input_shape)
         # self.eta = np.zeros(input_shape)
         super(LeakyReLU, self).__init__()
-        self.alpha = alpha
+        self.alpha1 = alpha1
     
     # 设置module打印格式
     def extra_repr(self):
-        s = ('alpha={alpha}')
+        s = ('alpha={alpha1}')
         return s.format(**self.__dict__)
 
     # 前向传播
@@ -56,25 +56,96 @@ class LeakyReLU(Module):
     def forward(self, input_array):
         self.input_array = input_array
         self.output_array = self.input_array.copy()
-        self.output_array[self.input_array<0] *= self.alpha
+        self.output_array[self.input_array<0] *= self.alpha1
         return self.output_array
 
     # 反向传播
     def gradient(self, eta):
         self.eta_next = eta
-        self.eta_next[self.input_array<0] *= self.alpha
+        self.eta_next[self.input_array<0] *= self.alpha1
         return self.eta_next
-        
-'''
-    tanh
-'''
-
 
 '''
     Sigmoid
 '''
+class Sigmoid(Module):
+    def __init__(self):
+        super(Sigmoid, self).__init__()
+    
+    # 设置module打印格式
+    def extra_repr(self):
+        s = ()
+        return s
+    # 1/(1+e^-x)
+    def forward(self, input_array):
+        self.output_array = 1/(1+np.exp(-input_array))
+        return self.output_array
+    
+    def gradient(self, eta):
+        self.eta_next = eta * self.output_array*(self.output_array-1) # d(sigmoid)=y*(1-y)
+        return self.eta_next
 
 
+class Sigmoid_CE(Module):
+    def __init__(self):
+        super(Sigmoid_CE, self).__init__()
+    
+    # 设置module打印格式
+    def extra_repr(self):
+        s = ()
+        return s
+    # 1/(1+e^-x)
+    def forward(self, input_array):
+        self.output_array = 1/(1+np.exp(-input_array))
+        return self.output_array
+    
+    def gradient(self, eta):
+        # eta = y, grad = sigmoid(x)-y
+        self.eta_next = self.output_array - eta.reshape((self.output_array.shape[0],1,1,1))
+        # print('sigmoid eta shape: \n', eta.shape)
+        return self.eta_next
+
+'''
+    tanh
+'''
+class Tanh(Module):
+    def __init__(self):
+        super(Tanh, self).__init__()
+    
+    # 设置module打印格式
+    def extra_repr(self):
+        s = ()
+        return s
+
+    # tanh=2*sigmoid(2x)-1
+    def forward(self, input_array):
+        self.output_array = 2/(1+np.exp(-2*input_array))-1
+        return self.output_array
+
+    def gradient(self, eta):
+        self.eta_next = eta.reshape(self.output_array.shape) * (1-self.output_array**2)
+        return self.eta_next
+
+
+class Tanh_CE(Module):
+    def __init__(self):
+        super(Tanh_CE, self).__init__()
+    
+    # 设置module打印格式
+    def extra_repr(self):
+        s = ()
+        return s
+
+    # tanh=2*sigmoid(2x)-1
+    def forward(self, input_array):
+        self.output_array = 2/(1+np.exp(-2*input_array))-1
+        return self.output_array
+
+    def gradient(self, eta):
+        # eta = y, grad = (1+1/y)*(tanh(x)-y)
+        eta = eta.reshape((self.output_array.shape[0],1,1,1))
+        self.eta_next = (1+1/eta)*(self.output_array - eta)
+        return self.eta_next
 
 def test_leakyrelu():
     x = np.random.randn(1,1,4,4).astype(np.float32)

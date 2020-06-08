@@ -60,7 +60,7 @@ class Optimizer(object):
                             'will change between runs. Please use a list instead.')
         else:
             param_group['params'] = list(params)
-            print('test33333')
+            # print('test33333')
 
         for param in param_group['params']:
             if not isinstance(param, Parameter):
@@ -94,7 +94,6 @@ class Optimizer(object):
                 if p.grad is not None:
                     # print('optim param_groups type: \n', type(p))
                     p.zero_grad()
-                    # print('optim param_groups zero_grad: \n', p.grad)
 
     '''优化步骤，参数更新'''
     def step(self, closure):
