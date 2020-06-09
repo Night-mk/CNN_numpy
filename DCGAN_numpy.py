@@ -80,29 +80,30 @@ class Discriminator(Module):
         dy_l4 = self.conv4.gradient(dy_sigmoid)
         dy_l3 = self.conv3.gradient(self.bn2.gradient(self.lrelu3.gradient(dy_l4)))
         dy_l2 = self.conv2.gradient(self.bn1.gradient(self.lrelu2.gradient(dy_l3)))
-        self.conv1.gradient(self.lrelu1.gradient(dy_l2))
-
+        dy_l1 = self.conv1.gradient(self.lrelu1.gradient(dy_l2))
+        # print('D_backward output shape: ',dy_l1.shape)
+        return dy_l1
 
 class Generator(Module):
     def __init__(self):
         super(Generator, self).__init__()
         # 构建反向传播网络组建
         # 输入Z=[100,]
-        # 100*1 -> 512*4*4
+        # 100*1 -> 256*4*4
         self.deconv1 = Deconv(nz, ngf*4, 4, zero_padding=0, stride=1, method='VALID', bias_required=False)
         self.bn1 = BatchNorm(ngf*4)
         self.relu1 = Activators.ReLU()
-
+        # 256*4*4 -> 128*8*8
         self.deconv2 = Deconv(ngf*4, ngf*2, 4, zero_padding=1, stride=2, method='SAME', bias_required=False)
         self.bn2 = BatchNorm(ngf*2)
         self.relu2 = Activators.ReLU()
-
+        # 128*8*8 -> 64*16*16
         self.deconv3 = Deconv(ngf*2, ngf, 4, zero_padding=1, stride=2, method='SAME', bias_required=False)
         self.bn3 = BatchNorm(ngf)
         self.relu3 = Activators.ReLU()
-
+        # 64*16*16 -> 1*32*32
         self.deconv4 = Deconv(ngf, nc, 4, zero_padding=1, stride=2, method='SAME', bias_required=False)
-        self.tanh = Activators.Tanh_CE()
+        self.tanh = Activators.Tanh()
 
     def forward(self, x_input):
         # print('G input shape: ',x_input.shape)
@@ -247,9 +248,10 @@ def test_dcgan():
             label.fill(real_label)
             output_d_fake = netD.forward(fake_data).reshape(-1)
             errG = loss.forward(output_d_fake, label)
-            # 计算G的梯度
+            # 计算G的梯度（梯度需要从D传向G）
             dy_errG = loss.gradient()
-            netG.backward(dy_errG)
+            dy_netD = netD.backward(dy_errG)
+            netG.backward(dy_netD)
             # 计算D(G(z))的均值
             D_G_z2 = np.mean(output_d_fake)
             # 更新G参数（不会去计算D的梯度2333）
@@ -261,8 +263,9 @@ def test_dcgan():
             # D(x)：训练中D对真实数据的平均预测输出
             # D(G(z))：训练中D对虚假数据的平均预测输出（为啥是除法？？）
             if t % 10 == 0:
-                print('[%d/%d][%d/%d]\t Loss_D: %.4f\t Loss_G: %.4f\t D(x): %.4f\t D(G(z)): %.4f / %.4f'
-                  % (epoch, num_epochs, t, len(mnist_train_loader), errD, errG, D_x, D_G_z1, D_G_z2))
+                end_time1 = time.time()
+                print('[%d/%d][%d/%d]\t Loss_D: %.4f\t Loss_G: %.4f\t D(x): %.4f\t D(G(z)): %.4f / %.4f\t train time: %.4f min'
+                  % (epoch, num_epochs, t, len(mnist_train_loader), errD, errG, D_x, D_G_z1, D_G_z2, (end_time1-start_time)/60))
 
             # 记录损失的历史，可以用作画图
             G_losses.append(errG)
@@ -275,44 +278,44 @@ def test_dcgan():
                 img_list.append(vutils.make_grid(fake_tensor, padding=2, normalize=True))
             
             iters += 1
-    """绘图：记录损失"""
-    plt.figure(figsize=(10,5))
-    plt.title("Generator and Discriminator Loss During Training")
-    plt.plot(G_losses,label="G")
-    plt.plot(D_losses,label="D")
-    plt.xlabel("iterations")
-    plt.ylabel("Loss")
-    plt.legend()
-    
-    # 保存图片
-    time_stemp = time.strftime("%Y-%m-%d-%H-%M", time.localtime())
-    plt.savefig('./experiment_img/gan_generate/Loss_fig-Adam'+str(num_epochs)+'('+time_stemp+').png')
-    # plt.show()
+        """绘图：记录损失"""
+        plt.figure(figsize=(10,5))
+        plt.title("Generator and Discriminator Loss During Training")
+        plt.plot(G_losses,label="G")
+        plt.plot(D_losses,label="D")
+        plt.xlabel("iterations")
+        plt.ylabel("Loss")
+        plt.legend()
+        
+        # 保存图片
+        time_stemp = time.strftime("%Y-%m-%d-%H-%M", time.localtime())
+        plt.savefig('./experiment_img/gan_generate/Loss_fig-Adam'+str(num_epochs)+'('+time_stemp+').png')
+        # plt.show()
 
-    """绘图：记录G输出"""
-    real_batch = next(iter(mnist_train_loader))
-    # Plot the real images
-    plt.figure(figsize=(15,15))
-    plt.subplot(1,2,1)
-    plt.axis("off")
-    plt.title("Real Images")
-    plt.imshow(np.transpose(vutils.make_grid(real_batch[0][:64], padding=5, normalize=True).cpu(),(1,2,0)))
+        """绘图：记录G输出"""
+        real_batch = next(iter(mnist_train_loader))
+        # Plot the real images
+        plt.figure(figsize=(15,15))
+        plt.subplot(1,2,1)
+        plt.axis("off")
+        plt.title("Real Images")
+        plt.imshow(np.transpose(vutils.make_grid(real_batch[0][:64], padding=5, normalize=True).cpu(),(1,2,0)))
 
-    # Plot the fake images from the last epoch
-    plt.subplot(1,2,2)
-    plt.axis("off")
-    plt.title("Fake Images")
-    plt.imshow(np.transpose(img_list[-1],(1,2,0)))
+        # Plot the fake images from the last epoch
+        plt.subplot(1,2,2)
+        plt.axis("off")
+        plt.title("Fake Images")
+        plt.imshow(np.transpose(img_list[-1],(1,2,0)))
 
-    # 保存图片
-    plt.savefig('./experiment_img/gan_generate/Real_Generate-Adam-'+str(num_epochs)+'('+time_stemp+').png')
-    # plt.show()
-    end_time = time.time()
-    print('training time: \n', (end_time-start_time)/60)
+        # 保存图片
+        plt.savefig('./experiment_img/gan_generate/Real_Generate-Adam-'+str(num_epochs)+'('+time_stemp+').png')
+        # plt.show()
+        end_time = time.time()
+        print('training time: \n', (end_time-start_time)/60)
 
-    '''存储模型'''
-    checkpoint_path = "./model_save/DCGAN_numpy_parameters-Adam"+str(num_epochs+num_epochs_pre)+".pkl"
-    torch.save({'epoch':num_epochs+num_epochs_pre, 'D_state_dict':netD.state_dict(), 'G_state_dict':netG.state_dict()}, checkpoint_path)
+        '''存储模型'''
+        checkpoint_path = "./model_save/DCGAN_numpy_parameters-Adam"+str(num_epochs+num_epochs_pre)+".pkl"
+        torch.save({'epoch':num_epochs+num_epochs_pre, 'D_state_dict':netD.state_dict(), 'G_state_dict':netG.state_dict()}, checkpoint_path)
 
 
 if __name__ == "__main__":

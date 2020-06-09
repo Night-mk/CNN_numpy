@@ -62,7 +62,8 @@ class LeakyReLU(Module):
     # 反向传播
     def gradient(self, eta):
         self.eta_next = eta
-        self.eta_next[self.input_array<0] *= self.alpha1
+        # print('eta shape: ',eta.shape)
+        self.eta_next[self.input_array<=0] *= self.alpha1
         return self.eta_next
 
 '''
@@ -100,9 +101,14 @@ class Sigmoid_CE(Module):
         return self.output_array
     
     def gradient(self, eta):
+        n_dim = self.output_array.ndim
+        for i in range(n_dim-1):
+            eta = eta[:,np.newaxis]
         # eta = y, grad = sigmoid(x)-y
-        self.eta_next = self.output_array - eta.reshape((self.output_array.shape[0],1,1,1))
+        self.eta_next = self.output_array - eta
+        self.eta_next /= self.output_array.shape[0] # 需要求平均
         # print('sigmoid eta shape: \n', eta.shape)
+        # print('sigmoid output_array shape: \n', self.output_array.shape)
         return self.eta_next
 
 '''
@@ -123,29 +129,9 @@ class Tanh(Module):
         return self.output_array
 
     def gradient(self, eta):
-        self.eta_next = eta.reshape(self.output_array.shape) * (1-self.output_array**2)
+        self.eta_next = eta * (1-self.output_array**2)
         return self.eta_next
 
-
-class Tanh_CE(Module):
-    def __init__(self):
-        super(Tanh_CE, self).__init__()
-    
-    # 设置module打印格式
-    def extra_repr(self):
-        s = ()
-        return s
-
-    # tanh=2*sigmoid(2x)-1
-    def forward(self, input_array):
-        self.output_array = 2/(1+np.exp(-2*input_array))-1
-        return self.output_array
-
-    def gradient(self, eta):
-        # eta = y, grad = (1+1/y)*(tanh(x)-y)
-        eta = eta.reshape((self.output_array.shape[0],1,1,1))
-        self.eta_next = (1+1/eta)*(self.output_array - eta)
-        return self.eta_next
 
 def test_leakyrelu():
     x = np.random.randn(1,1,4,4).astype(np.float32)

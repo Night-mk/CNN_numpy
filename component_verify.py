@@ -303,9 +303,9 @@ def conv_checkgrad():
 
 
 '''
-    验证：激活层AC（成功）
+    验证：激活层relu（成功）
 '''
-def ac_test():
+def relu_test():
     """定义输入样本"""
     # 输入数据大小为 1x2x4x4
     x = torch.tensor(np.random.randn(1,2,4,4).astype(np.float32), requires_grad=True)
@@ -330,6 +330,133 @@ def ac_test():
     print('r_out_grad: \n', x.grad)
     print('r_out_grad_numpy: \n', r_eta)
 
+
+'''
+    验证：激活层leakyrelu（成功）
+'''
+def leakyrelu_test():
+    """定义输入样本"""
+    # 输入数据大小为 1x2x4x4
+    x = torch.tensor(np.random.randn(1,2,4,4).astype(np.float32), requires_grad=True)
+    x_numpy = x.detach().numpy()
+
+    """定义误差"""
+    dy = torch.tensor(np.random.randn(1,2,4,4).astype(np.float32), requires_grad=True)
+    dy_numpy = dy.detach().numpy()
+
+    """前向传播"""
+    # pytorch
+    lr_tensor = nn.LeakyReLU(0.2)
+    lr_out_tensor = lr_tensor(x)
+    # numpy
+    lr_numpy = Activators.LeakyReLU(0.2)
+    lr_out_numpy = lr_numpy.forward(x_numpy)
+
+    """反向传播"""
+    # pytorch
+    lr_out_tensor.backward(dy)
+    x_grad = x.grad
+
+    # numpy
+    x_grad_numpy = lr_numpy.gradient(dy_numpy)
+
+    print('-----对比输出-----')
+    print('lr_out_tensor: \n', lr_out_tensor)
+    print('lr_out_numpy: \n', lr_out_numpy)
+    print('lr_out_error: \n', lr_out_numpy-lr_out_tensor.detach().numpy())
+
+    print('-----对比x_grad-----')
+    print('x_grad: \n', x_grad)
+    print('x_grad.shape: \n', x_grad.shape)
+
+    print('x_grad_numpy: \n', x_grad_numpy)
+    print('x_grad_numpy.shape: \n', x_grad_numpy.shape)
+
+    print('x_grad_error: \n', x_grad_numpy-x_grad.detach().numpy())
+
+
+'''
+    验证：激活层sigmoid（成功）
+'''
+def sigmoid_test():
+    x_numpy = np.random.randn(6,1).astype(np.float32)
+    x = torch.tensor(x_numpy, requires_grad=True)  
+
+    y_target_numpy = np.array([0,0,1,0,1,1]).astype(np.float32) # target要是浮点数
+    y_target = torch.tensor(y_target_numpy)  
+
+    loss_tensor = nn.BCELoss()
+    loss_numpy = Loss.BECLoss()
+    """前向传播"""
+    s_tensor = nn.Sigmoid()
+    s_out_tensor = s_tensor(x).view(-1)
+    
+    s_numpy = Activators.Sigmoid_CE()
+    s_out_numpy = s_numpy.forward(x_numpy).reshape(-1)
+
+    print('-----对比输出-----')
+    print('s_out_tensor: \n', s_out_tensor)
+    print('s_out_tensor shape: \n', s_out_tensor.shape)
+    print('s_out_numpy: \n', s_out_numpy)
+    print('s_out_numpy shape: \n', s_out_numpy.shape)
+    print('s_out_error: \n', s_out_numpy-s_out_tensor.detach().numpy())
+
+    """反向传播"""
+    err_tensor = loss_tensor(s_out_tensor, y_target) 
+    err_numpy  = loss_numpy.forward(s_out_numpy, y_target_numpy)
+
+    err_tensor.backward()
+    x_grad = x.grad
+
+    dy_loss = loss_numpy.gradient()
+    x_grad_numpy = s_numpy.gradient(dy_loss)
+
+
+    print('-----对比loss-----')
+    print('err_tensor: \n', err_tensor)
+    print('err_numpy: \n', err_numpy)
+    print('err_error: \n', err_numpy-err_tensor.detach().numpy())
+
+    print('-----对比x_grad-----')
+    print('x_grad: \n', x_grad)
+    print('x_grad_numpy: \n', x_grad_numpy)
+    print('x_grad_error: \n', x_grad_numpy-x_grad.detach().numpy())
+
+
+'''
+    验证：激活层tanh（成功）
+'''
+def tanh_test():
+    x_numpy = np.random.randn(6,1).astype(np.float32)
+    x = torch.tensor(x_numpy, requires_grad=True)  
+
+    """前向传播"""
+    s_tensor = nn.Tanh()
+    s_out_tensor = s_tensor(x)
+    
+    s_numpy = Activators.Tanh()
+    s_out_numpy = s_numpy.forward(x_numpy)
+
+    print('-----对比输出-----')
+    print('s_out_tensor: \n', s_out_tensor)
+    print('s_out_tensor shape: \n', s_out_tensor.shape)
+    print('s_out_numpy: \n', s_out_numpy)
+    print('s_out_numpy shape: \n', s_out_numpy.shape)
+    print('s_out_error: \n', s_out_numpy-s_out_tensor.detach().numpy())
+
+    """反向传播"""
+    dy_numpy = np.random.random(s_out_numpy.shape).astype(np.float32)
+    dy = torch.tensor(dy_numpy, requires_grad=True)
+
+    s_out_tensor.backward(dy)
+    x_grad = x.grad
+
+    x_grad_numpy = s_numpy.gradient(dy_numpy)
+
+    print('-----对比x_grad-----')
+    print('x_grad: \n', x_grad)
+    print('x_grad_numpy: \n', x_grad_numpy)
+    print('x_grad_error: \n', x_grad_numpy-x_grad.detach().numpy())
 
 '''
     验证：批量标准化层BN（成功）
@@ -594,8 +721,11 @@ if __name__ == '__main__':
     # loss_test()
     # conv_test()
     # conv_checkgrad()
-    # ac_test()
-    bn_test()
+    # relu_test()
+    # leakyrelu_test()
+    # sigmoid_test()
+    tanh_test()
+    # bn_test()
     # fc_test()
     # pooling_test()
     # deconv_test()

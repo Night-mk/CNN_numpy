@@ -10,3 +10,4 @@ layers/__pycache__/*
 
 study_python.py
 Lenet_component.py
+MNIST.py
