@@ -147,7 +147,7 @@ def test_dcgan():
     """加载MNIST数据集"""
     mnist_train_dataset = datasets.MNIST('./data/',download=True,train=True,transform=transforms.Compose([
                                    transforms.ToTensor(),
-                                  transforms.Normalize((0.1307,), (0.3081,)),
+                                #   transforms.Normalize((0.1307,), (0.3081,)),
                                ]))
     print('traindata_len: \n',len(mnist_train_dataset))
     # 构建数据集迭代器
@@ -204,6 +204,9 @@ def test_dcgan():
             ## 使用真实数据X进行训练（计算log(D(x))）
             netD.zero_grad() # 训练更新前需要在每个batch中将梯度设置为0
             real_data = data.detach().numpy()
+            # print('real_data: \n',real_data[0])
+            # print('real_data shape: \n',real_data[0].shape)
+            # break
             ## MNIST 数据需要先从1x28x28填充到1x32x32
             if is_mnist:
                 real_data = np.pad(real_data, ((0, 0), (0, 0), (2, 2), (2, 2)), 'constant', constant_values=0)
@@ -289,7 +292,7 @@ def test_dcgan():
         
         # 保存图片
         time_stemp = time.strftime("%Y-%m-%d-%H-%M", time.localtime())
-        plt.savefig('./experiment_img/gan_generate/Loss_fig-Adam'+str(num_epochs)+'('+time_stemp+').png')
+        plt.savefig('./experiment_img/gan_generate/Loss_fig-Adam-'+str(epoch+num_epochs_pre)+'('+time_stemp+').png')
         # plt.show()
 
         """绘图：记录G输出"""
@@ -308,13 +311,13 @@ def test_dcgan():
         plt.imshow(np.transpose(img_list[-1],(1,2,0)))
 
         # 保存图片
-        plt.savefig('./experiment_img/gan_generate/Real_Generate-Adam-'+str(num_epochs)+'('+time_stemp+').png')
+        plt.savefig('./experiment_img/gan_generate/Real_Generate-Adam-'+str(epoch+num_epochs_pre)+'('+time_stemp+').png')
         # plt.show()
         end_time = time.time()
         print('training time: \n', (end_time-start_time)/60)
 
         '''存储模型'''
-        checkpoint_path = "./model_save/DCGAN_numpy_parameters-Adam"+str(num_epochs+num_epochs_pre)+".pkl"
+        checkpoint_path = "./model_save/DCGAN_numpy_parameters-Adam-"+str(epoch+num_epochs_pre)+".pkl"
         torch.save({'epoch':num_epochs+num_epochs_pre, 'D_state_dict':netD.state_dict(), 'G_state_dict':netG.state_dict()}, checkpoint_path)
 
 
