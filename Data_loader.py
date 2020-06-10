@@ -113,8 +113,8 @@ if __name__ == '__main__':
     '''可视化处理数据集'''
     real_batch = next(iter(dataloader))
     print(real_batch[0].shape)
-    for sample in real_batch[0]:
-        sample = transforms.ToPILImage()(sample).convert('RGB')
+    # for sample in real_batch[0]:
+    #     sample = transforms.ToPILImage()(sample).convert('RGB')
     # 绘制图像
     plt.figure(figsize=(8,8))
     plt.axis("off")
@@ -123,7 +123,3 @@ if __name__ == '__main__':
     plt.imshow(np.transpose(vutils.make_grid(real_batch[0][:64], padding=2, normalize=False).cpu(),(1,2,0)))
     # 显示该图像（加载成功的）
     plt.show()
-
-    
-    
-    
