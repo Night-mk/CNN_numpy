@@ -97,9 +97,17 @@ if __name__ == '__main__':
     ])
     root_dir = './data/cifar-10/cifar-10-python/cifar-10-batches-py'
     cifar_train_data = CifarDataset(root_dir, transform=cifar_transform, train=True)
-    dataloader = DataLoader(cifar_train_data,batch_size=64,shuffle=True)#使用DataLoader加载数据
+    dataloader = DataLoader(cifar_train_data,batch_size=64,shuffle=False)#使用DataLoader加载数据
 
+    num = 0
     '''迭代数据集'''
+    for t, (data, target) in enumerate(dataloader, 0):
+        for i, target_i in enumerate(target): # 筛选dog类
+            if target_i==5:
+                num+=1
+        print('num_accumulate: ', num)
+    print('num_sum: ', num)
+        
     # for i, (sample, label) in enumerate(dataloader):
     #     if i<3:
     #         print('sample: ',sample[i].size())

@@ -22,6 +22,7 @@ import BN
 import Deconv
 import numpy as np
 from Parameter import Parameter
+import time
 
 '''
     验证：损失函数CrossEntropyLoss（成功）

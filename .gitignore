@@ -11,3 +11,5 @@ layers/__pycache__/*
 study_python.py
 Lenet_component.py
 MNIST.py
+DCGAN_gen_cifar.py
+cifar_filter.py

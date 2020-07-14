@@ -5,6 +5,27 @@ import numpy as np
 from Module import Module
 
 '''
+    Square
+'''
+class Square(Module):
+    def __init__(self):
+        super(Square, self).__init__()
+    # 设置module打印格式
+    def extra_repr(self):
+        s = ()
+        return s
+    # 前向传播
+    def forward(self, input_array):
+        # 求平方，做激活函数？？
+        self.input_array = input_array
+        return self.input_array**2
+
+    def gradient(self, eta):
+        self.eta_next = eta*2*self.input_array
+        return self.eta_next
+
+
+'''
     ReLU
 '''
 class ReLU(Module):

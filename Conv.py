@@ -45,6 +45,11 @@ def padding(input_array, method, zp):
         input_array = np.pad(input_array, ((0, 0), (0, 0), (zp, zp), (zp, zp)), 'constant', constant_values=0)
         return input_array
 
+"""额外填充矩阵（左边，上边各填充一行0）"""
+def padding_additional(input_array):
+    input_array_pad = np.pad(input_array, ((0,0), (0,0), (1,0), (1,0)), 'constant', constant_values=0)
+    return input_array_pad
+
 '''
 通用函数：element_wise_op
 对numpy数组进行逐个元素的操作。op为函数。element_wise_op函数实现了对numpy数组进行按元素操作，并将返回值写回到数组中
@@ -209,11 +214,13 @@ class ConvLayer(Module):
         if self.method=='VALID':
             eta_pad = np.pad(eta_pad, ((0,0),(0,0),(self.filter_height-1, self.filter_height-1),(self.filter_width-1, self.filter_width-1)),'constant',constant_values = (0,0))
 
-        same_pad_height = (self.input_height-1+self.filter_height-eta_pad.shape[2])//2
-        same_pad_width = (self.input_width-1+self.filter_width-eta_pad.shape[3])//2
+        same_pad_height = (self.input_height-1+self.filter_height-eta_pad.shape[2])
+        same_pad_width = (self.input_width-1+self.filter_width-eta_pad.shape[3])
         if self.method=='SAME':
-            eta_pad = np.pad(eta_pad, ((0,0),(0,0),(same_pad_height, same_pad_height),(same_pad_width, same_pad_width)),'constant',constant_values = (0,0))
+            eta_pad = np.pad(eta_pad, ((0,0),(0,0),(same_pad_height//2, same_pad_height//2),(same_pad_width//2, same_pad_width//2)),'constant',constant_values = (0,0))
         
+        if same_pad_height%2!=0: # 在input的左侧和上侧填充0
+            eta_pad = padding_additional(eta_pad)
         # print('eta.shape: \n', self.eta.shape[0])
         # print('eta_pad SAME VALID shape: \n', eta_pad.shape)
 
